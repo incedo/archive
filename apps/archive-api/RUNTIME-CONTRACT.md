@@ -56,6 +56,7 @@ Expected deployment contract:
 - AWS resource names can be provided as workflow inputs or through GitHub environment variables
 - AWS resource names can also be provided through `deploy/aws/<environment>.env` for non-secret defaults
 - the GitHub OIDC deploy role ARN is non-secret configuration and should be supplied from IaC outputs, not a hand-managed GitHub secret
+- dev runtime start/stop automation may also consume an optional `AWS_RDS_INSTANCE_IDENTIFIER` when the environment uses a managed PostgreSQL instance
 
 Operator guide:
 

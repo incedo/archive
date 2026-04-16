@@ -1,0 +1,141 @@
+name: AWS Start Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      desired_count:
+        description: ECS desired count after startup
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve runtime configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_DESIRED_COUNT: ${{ inputs.desired_count }}
+          VAR_AWS_REGION: ${{ vars.AWS_REGION }}
+          VAR_AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          VAR_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+          VAR_ECS_SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+          VAR_RDS_INSTANCE_IDENTIFIER: ${{ vars.AWS_RDS_INSTANCE_IDENTIFIER }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/aws/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          aws_region="${AWS_REGION:-${VAR_AWS_REGION:-}}"
+          aws_deploy_role_arn="${AWS_DEPLOY_ROLE_ARN:-${VAR_AWS_DEPLOY_ROLE_ARN:-}}"
+          ecs_cluster="${AWS_ECS_CLUSTER:-${VAR_ECS_CLUSTER:-}}"
+          ecs_service="${AWS_ECS_SERVICE:-${VAR_ECS_SERVICE:-}}"
+          rds_instance_identifier="${AWS_RDS_INSTANCE_IDENTIFIER:-${VAR_RDS_INSTANCE_IDENTIFIER:-}}"
+          desired_count="${INPUT_DESIRED_COUNT:-1}"
+
+          missing=0
+          for name in aws_region aws_deploy_role_arn ecs_cluster ecs_service; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required runtime setting: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure deploy/aws/${TARGET_ENVIRONMENT}.env or the corresponding GitHub environment variables." >&2
+            exit 1
+          fi
+
+          {
+            echo "aws_region=$aws_region"
+            echo "aws_deploy_role_arn=$aws_deploy_role_arn"
+            echo "ecs_cluster=$ecs_cluster"
+            echo "ecs_service=$ecs_service"
+            echo "rds_instance_identifier=$rds_instance_identifier"
+            echo "desired_count=$desired_count"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.aws_deploy_role_arn }}
+          aws-region: ${{ steps.config.outputs.aws_region }}
+
+      - name: Start RDS instance
+        if: ${{ steps.config.outputs.rds_instance_identifier != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(aws rds describe-db-instances \
+            --db-instance-identifier "${{ steps.config.outputs.rds_instance_identifier }}" \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)"
+          echo "Current RDS status: $status"
+          if [ "$status" = "stopped" ]; then
+            aws rds start-db-instance --db-instance-identifier "${{ steps.config.outputs.rds_instance_identifier }}"
+            aws rds wait db-instance-available --db-instance-identifier "${{ steps.config.outputs.rds_instance_identifier }}"
+          fi
+
+      - name: Skip RDS start when not configured
+        if: ${{ steps.config.outputs.rds_instance_identifier == '' }}
+        run: echo "AWS_RDS_INSTANCE_IDENTIFIER not configured. Skipping database start."
+
+      - name: Scale ECS service up
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${{ steps.config.outputs.ecs_cluster }}" \
+            --service "${{ steps.config.outputs.ecs_service }}" \
+            --desired-count "${{ steps.config.outputs.desired_count }}"
+
+      - name: Wait for ECS service stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable \
+            --cluster "${{ steps.config.outputs.ecs_cluster }}" \
+            --services "${{ steps.config.outputs.ecs_service }}"
+
+      - name: Publish runtime summary
+        run: |
+          {
+            echo "## AWS runtime start"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Region: \`${{ steps.config.outputs.aws_region }}\`"
+            echo "- ECS cluster: \`${{ steps.config.outputs.ecs_cluster }}\`"
+            echo "- ECS service: \`${{ steps.config.outputs.ecs_service }}\`"
+            echo "- Desired count: \`${{ steps.config.outputs.desired_count }}\`"
+            if [ -n "${{ steps.config.outputs.rds_instance_identifier }}" ]; then
+              echo "- RDS instance: \`${{ steps.config.outputs.rds_instance_identifier }}\`"
+            else
+              echo "- RDS instance: _not configured_"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
