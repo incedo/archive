@@ -1,0 +1,2335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloud Cost Calculator</title>
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --panel: #fffaf3;
+      --panel-strong: #fff;
+      --ink: #1f2328;
+      --muted: #646b73;
+      --line: #ded2bf;
+      --accent: #1b5e5a;
+      --accent-soft: #d8ede8;
+      --accent-2: #9c5d27;
+      --accent-2-soft: #f3e1d0;
+      --shadow: 0 18px 45px rgba(58, 41, 20, 0.08);
+      --radius: 18px;
+      --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+      --sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(27, 94, 90, 0.08), transparent 30%),
+        radial-gradient(circle at top right, rgba(156, 93, 39, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8f4ed 0%, var(--bg) 100%);
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: rgba(255, 250, 243, 0.88);
+      border: 1px solid rgba(222, 210, 191, 0.9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero-main,
+    .hero-side,
+    .inputs,
+    .summary,
+    .details {
+      padding: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.05;
+    }
+
+    h1 {
+      margin-top: 14px;
+      font-size: clamp(2.1rem, 3vw, 3.6rem);
+      letter-spacing: -0.04em;
+    }
+
+    .lead {
+      margin: 16px 0 0;
+      max-width: 66ch;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    .hero-side {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      justify-content: space-between;
+    }
+
+    .meta-pill {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+
+    .meta-pill strong {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+
+    .meta-pill span {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 20px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .section-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .preset-btn {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .ghost-btn {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+
+    .input-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel-strong);
+    }
+
+    .field label {
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .field small {
+      color: var(--muted);
+      line-height: 1.4;
+      min-height: 2.2em;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #cdbba4;
+      background: #fffdf8;
+      font: inherit;
+      color: var(--ink);
+    }
+
+    .field select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #cdbba4;
+      background: #fffdf8;
+      font: inherit;
+      color: var(--ink);
+    }
+
+    .totals-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .totals-block {
+      margin-bottom: 18px;
+    }
+
+    .totals-block h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+    }
+
+    .totals-block p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .provider-card {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .provider-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -40% auto;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: rgba(27, 94, 90, 0.06);
+    }
+
+    .provider-card.scaleway::after {
+      background: rgba(156, 93, 39, 0.08);
+    }
+
+    .provider-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .provider-top h3 {
+      font-size: 1.15rem;
+    }
+
+    .provider-top span {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .money {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 12px;
+    }
+
+    .money-line strong {
+      display: block;
+      font-size: 2rem;
+      letter-spacing: -0.04em;
+    }
+
+    .money-line span {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .provider-substats {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .provider-substat {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(222, 210, 191, 0.8);
+    }
+
+    .provider-substat strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 2px;
+    }
+
+    .provider-substat span {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .comparison-note {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px dashed #c9b79f;
+      background: rgba(255, 255, 255, 0.6);
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .fx-panel {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .fx-panel strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .fx-panel span {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.93rem;
+    }
+
+    .scenario-card {
+      margin-bottom: 16px;
+      padding: 16px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(27, 94, 90, 0.07), rgba(156, 93, 39, 0.08));
+      border: 1px solid var(--line);
+    }
+
+    .scenario-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1rem;
+    }
+
+    .scenario-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .subsection-card {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+    }
+
+    .subsection-card h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+
+    .subsection-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .toggle-row label {
+      font-weight: 700;
+    }
+
+    .toggle-row span {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .export-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel-strong);
+      overflow: hidden;
+    }
+
+    details + details {
+      margin-top: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 16px 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .summary-note {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .table-wrap {
+      padding: 0 18px 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(222, 210, 191, 0.8);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    td:last-child,
+    th:last-child {
+      text-align: right;
+    }
+
+    td:nth-child(2),
+    th:nth-child(2) {
+      text-align: right;
+    }
+
+    .line-name {
+      font-weight: 700;
+    }
+
+    .line-note {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .chart-card {
+      padding: 18px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .chart-card h3 {
+      margin-bottom: 6px;
+      font-size: 1.05rem;
+    }
+
+    .chart-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .chart {
+      width: 100%;
+      height: 280px;
+      display: block;
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(27, 94, 90, 0.02), rgba(27, 94, 90, 0)),
+        #fffdf9;
+      border: 1px solid rgba(222, 210, 191, 0.7);
+    }
+
+    .mini-breakdown {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .mini-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(222, 210, 191, 0.7);
+      font-size: 0.9rem;
+    }
+
+    .mini-line span:first-child {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .mini-line span:last-child {
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .kpi {
+      padding: 14px;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .kpi strong {
+      display: block;
+      font-size: 1.1rem;
+      margin-bottom: 3px;
+    }
+
+    .kpi span {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .insight-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .insight-card {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+    }
+
+    .insight-card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.96rem;
+    }
+
+    .insight-card span {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.92em;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        width: min(100vw - 20px, 1280px);
+        padding-top: 20px;
+      }
+
+      .inputs,
+      .summary,
+      .details,
+      .hero-main,
+      .hero-side {
+        padding: 18px;
+      }
+
+      .input-grid,
+      .totals-grid,
+      .kpi-strip {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="card hero-main">
+        <div class="eyebrow">v0.1 cost model</div>
+        <h1>Cloud Cost Calculator</h1>
+        <p class="lead">
+          Feature-driven monthly and yearly cost estimates for the archive platform. This calculator is meant to support cloud choices early, with defaults prefilled and provider-level detail available below.
+        </p>
+      </div>
+      <aside class="card hero-side">
+        <div class="meta-pill">
+          <strong>Current scope</strong>
+          <span>AWS and Scaleway, based on the current reference architectures and the known feature set.</span>
+        </div>
+        <div class="meta-pill">
+          <strong>Important comparison note</strong>
+          <span>AWS totals are shown in USD. Scaleway totals are shown in EUR. This page also normalizes both totals using a startup FX lookup and a fallback rate if that lookup fails.</span>
+        </div>
+        <div class="meta-pill">
+          <strong>Use this for</strong>
+          <span>Early architecture choices, scenario exploration, and identifying the real cost drivers before provider-specific implementation stories.</span>
+        </div>
+      </aside>
+    </section>
+
+    <div class="layout">
+      <section class="card inputs">
+        <div class="section-title">
+          <div>
+            <h2>Inputs</h2>
+            <p>Change the assumptions or apply a preset scenario.</p>
+          </div>
+        </div>
+
+        <div class="preset-row">
+          <button class="preset-btn" type="button" data-preset="mvp">Preset: MVP</button>
+          <button class="preset-btn" type="button" data-preset="compliance">Preset: Compliance-heavy</button>
+          <button class="preset-btn" type="button" data-preset="migration">Preset: Migration-heavy</button>
+          <button class="preset-btn" type="button" data-preset="highvolume">Preset: 25M invoices / year</button>
+          <button class="preset-btn" type="button" id="calculate-now">Calculate</button>
+          <button class="ghost-btn" type="button" id="reset-defaults">Reset defaults</button>
+        </div>
+
+        <div class="scenario-card">
+          <strong id="scenario-title">Scenario: Custom</strong>
+          <p id="scenario-description">
+            You are editing the current working assumptions directly. Use a preset to jump to a reference profile from the calculator model.
+          </p>
+        </div>
+
+        <div class="toggle-row">
+          <input type="checkbox" id="auto-scale-model" checked>
+          <div>
+            <label for="auto-scale-model">Auto-scale linked assumptions</label>
+            <span>When enabled, changes in document volume and lifecycle policy ripple only through structurally linked assumptions like storage, retrieval, workflows, metadata and search. Logs, OCR and AI remain manual.</span>
+          </div>
+        </div>
+
+        <div class="input-grid" id="input-grid"></div>
+
+        <div class="subsection-card">
+          <h3>Batch import controls</h3>
+          <p>Use these inputs to tune the one-time migration independently from the recurring platform assumptions.</p>
+          <div class="input-grid" id="import-input-grid"></div>
+        </div>
+      </section>
+
+      <section class="card summary">
+        <div class="section-title">
+          <div>
+            <h2>Totals</h2>
+            <p>Monthly and yearly estimates at provider level.</p>
+          </div>
+        </div>
+
+        <div class="totals-block">
+          <h3>Recurring platform cost</h3>
+          <p>Steady-state monthly and yearly cost for the current archive platform model.</p>
+          <div class="totals-grid">
+            <article class="provider-card aws">
+              <div class="provider-top">
+                <h3>AWS</h3>
+                <span>USD</span>
+              </div>
+              <div class="money">
+                <div class="money-line">
+                  <strong id="aws-monthly">$0.00</strong>
+                  <span>Estimated monthly cost</span>
+                </div>
+                <div class="money-line">
+                  <strong id="aws-yearly">$0.00</strong>
+                  <span>Estimated yearly cost</span>
+                </div>
+              </div>
+              <div class="provider-substats">
+                <div class="provider-substat">
+                  <strong id="aws-storage-footprint">0 GB</strong>
+                  <span>Total modeled storage footprint</span>
+                </div>
+                <div class="provider-substat">
+                  <strong id="aws-storage-yearly">$0.00</strong>
+                  <span>Yearly storage-related cost</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="provider-card scaleway">
+              <div class="provider-top">
+                <h3>Scaleway</h3>
+                <span>EUR</span>
+              </div>
+              <div class="money">
+                <div class="money-line">
+                  <strong id="scw-monthly">€0.00</strong>
+                  <span>Estimated monthly cost</span>
+                </div>
+                <div class="money-line">
+                  <strong id="scw-yearly">€0.00</strong>
+                  <span>Estimated yearly cost</span>
+                </div>
+              </div>
+              <div class="provider-substats">
+                <div class="provider-substat">
+                  <strong id="scw-storage-footprint">0 GB</strong>
+                  <span>Total modeled storage footprint</span>
+                </div>
+                <div class="provider-substat">
+                  <strong id="scw-storage-yearly">€0.00</strong>
+                  <span>Yearly storage-related cost</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="totals-block">
+          <h3>Batch import and migration cost</h3>
+          <p>One-time estimate for importing a historical archive, modeled separately from recurring run costs.</p>
+          <div class="totals-grid">
+            <article class="provider-card aws">
+              <div class="provider-top">
+                <h3>AWS</h3>
+                <span>USD</span>
+              </div>
+              <div class="money">
+                <div class="money-line">
+                  <strong id="aws-import-cost">$0.00</strong>
+                  <span>One-time import estimate</span>
+                </div>
+              </div>
+              <div class="provider-substats">
+                <div class="provider-substat">
+                  <strong id="import-storage-footprint">0 TB</strong>
+                  <span>Modeled 10-year import footprint</span>
+                </div>
+                <div class="provider-substat">
+                  <strong id="import-total-documents">0</strong>
+                  <span>Total historical documents imported</span>
+                </div>
+              </div>
+              <div class="mini-breakdown">
+                <div class="mini-line"><span>Storage load</span><span id="aws-import-storage-line">$0.00</span></div>
+                <div class="mini-line"><span>Metadata backfill</span><span id="aws-import-metadata-line">$0.00</span></div>
+                <div class="mini-line"><span>Index backfill</span><span id="aws-import-index-line">$0.00</span></div>
+                <div class="mini-line"><span>OCR / AI enrichment</span><span id="aws-import-ai-line">$0.00</span></div>
+                <div class="mini-line"><span>Migration compute</span><span id="aws-import-compute-line">$0.00</span></div>
+              </div>
+            </article>
+
+            <article class="provider-card scaleway">
+              <div class="provider-top">
+                <h3>Scaleway</h3>
+                <span>EUR</span>
+              </div>
+              <div class="money">
+                <div class="money-line">
+                  <strong id="scw-import-cost">€0.00</strong>
+                  <span>One-time import estimate</span>
+                </div>
+              </div>
+              <div class="provider-substats">
+                <div class="provider-substat">
+                  <strong id="import-ocr-pages">0</strong>
+                  <span>Historical OCR or AI pages modeled</span>
+                </div>
+                <div class="provider-substat">
+                  <strong id="historical-years">0 years</strong>
+                  <span>Historical window included in migration</span>
+                </div>
+              </div>
+              <div class="mini-breakdown">
+                <div class="mini-line"><span>Storage load</span><span id="scw-import-storage-line">€0.00</span></div>
+                <div class="mini-line"><span>Metadata backfill</span><span id="scw-import-metadata-line">€0.00</span></div>
+                <div class="mini-line"><span>Index backfill</span><span id="scw-import-index-line">€0.00</span></div>
+                <div class="mini-line"><span>OCR / AI enrichment</span><span id="scw-import-ai-line">€0.00</span></div>
+                <div class="mini-line"><span>Migration compute</span><span id="scw-import-compute-line">€0.00</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="comparison-note" id="comparison-note"></div>
+
+        <div class="fx-panel">
+          <strong id="fx-title">FX normalization</strong>
+          <span id="fx-note">Checking startup exchange rate for USD and EUR normalization.</span>
+        </div>
+
+        <div class="kpi-strip">
+          <div class="kpi">
+            <strong id="monthly-ingest-gb">0.00 GB</strong>
+            <span>Monthly ingest volume</span>
+          </div>
+          <div class="kpi">
+            <strong id="workflow-transitions">0</strong>
+            <span>Workflow transitions per month</span>
+          </div>
+          <div class="kpi">
+            <strong id="function-gb-seconds">0</strong>
+            <span>Function GB-seconds per month</span>
+          </div>
+        </div>
+
+        <div class="kpi-strip">
+          <div class="kpi">
+            <strong id="normalized-aws-eur">€0.00</strong>
+            <span>AWS monthly normalized to EUR</span>
+          </div>
+          <div class="kpi">
+            <strong id="normalized-scw-usd">$0.00</strong>
+            <span>Scaleway monthly normalized to USD</span>
+          </div>
+          <div class="kpi">
+            <strong id="retrieval-share">0.0%</strong>
+            <span>Retrieval volume as % of monthly ingest volume</span>
+          </div>
+        </div>
+
+        <div class="kpi-strip">
+          <div class="kpi">
+            <strong id="yearly-storage-growth">0 TB</strong>
+            <span>Steady-state storage growth per year</span>
+          </div>
+          <div class="kpi">
+            <strong id="completed-migration-footprint">0 TB</strong>
+            <span>Completed migration footprint</span>
+          </div>
+          <div class="kpi">
+            <strong id="import-duration">0 days</strong>
+            <span>Estimated batch import duration</span>
+          </div>
+        </div>
+
+        <div class="insight-strip">
+          <div class="insight-card">
+            <strong id="aws-lifecycle-note">AWS lifecycle insight</strong>
+            <span id="aws-lifecycle-detail">Hot, cold, transition and restore behavior will appear here.</span>
+          </div>
+          <div class="insight-card">
+            <strong id="scw-lifecycle-note">Scaleway lifecycle insight</strong>
+            <span id="scw-lifecycle-detail">Hot, cold, transition and restore behavior will appear here.</span>
+          </div>
+        </div>
+
+        <div class="export-row">
+          <button class="preset-btn" type="button" id="export-json">Export JSON</button>
+          <button class="preset-btn" type="button" id="export-csv">Export CSV</button>
+        </div>
+
+        <p class="footer-note">
+          This page combines formula-based lines with a few fixed-plan placeholders where a cloud's pricing depends on selected managed plans rather than a simple public per-unit rate.
+        </p>
+      </section>
+    </div>
+
+    <section class="card details" style="margin-top: 20px;">
+      <div class="section-title">
+        <div>
+          <h2>Provider details</h2>
+          <p>Each section shows cost lines, assumptions and annualized totals.</p>
+        </div>
+      </div>
+
+      <details open>
+        <summary>
+          <span>AWS detail breakdown</span>
+          <span class="summary-note">serverless + object storage + governance stack</span>
+        </summary>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Monthly</th>
+                <th>Yearly</th>
+              </tr>
+            </thead>
+            <tbody id="aws-breakdown"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details open>
+        <summary>
+          <span>Scaleway detail breakdown</span>
+          <span class="summary-note">object storage + managed DB + search + serverless</span>
+        </summary>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Monthly</th>
+                <th>Yearly</th>
+              </tr>
+            </thead>
+            <tbody id="scw-breakdown"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <div class="charts">
+        <div class="chart-card">
+          <h3>AWS cost drivers</h3>
+          <p>Top monthly cost lines based on the current assumptions.</p>
+          <canvas id="aws-chart" class="chart" width="560" height="280"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Scaleway cost drivers</h3>
+          <p>Top monthly cost lines based on the current assumptions.</p>
+          <canvas id="scw-chart" class="chart" width="560" height="280"></canvas>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const fxState = {
+      usdToEur: 0.855,
+      eurToUsd: 1 / 0.855,
+      source: "Fallback",
+      date: "reference fallback"
+    };
+
+    const recurringFields = [
+      { key: "documents_ingested_per_month", label: "Documents ingested / month", help: "New documents entering the archive each month.", step: "1", min: "0" },
+      { key: "avg_document_size_mb", label: "Average document size (MB)", help: "Average original document size before indexing or OCR.", step: "0.01", min: "0" },
+      { key: "pages_per_document", label: "Pages per document", help: "Used for OCR and AI metadata extraction cost estimates.", step: "1", min: "0" },
+      { key: "active_storage_gb", label: "Active storage (GB)", help: "Calculated hot storage footprint based on ingest volume and years before cold storage.", step: "0.01", min: "0" },
+      { key: "cold_archive_storage_gb", label: "Cold archive storage (GB / month)", help: "Data moved to archive or glacier-like tiers.", step: "0.01", min: "0" },
+      { key: "years_before_cold_transition", label: "Years before cold transition", help: "Lifecycle policy assumption for how long documents stay in hot storage.", step: "0.1", min: "0" },
+      { key: "retention_years_total", label: "Total retention years", help: "Lifecycle and retention policy assumption for total retained lifetime.", step: "0.1", min: "0" },
+      { key: "subscriber_count", label: "Subscribers", help: "Total subscriber base that may retrieve invoices.", step: "1", min: "0" },
+      { key: "monthly_subscriber_retrieval_rate_percent", label: "Subscribers retrieving monthly (%)", help: "Share of subscribers retrieving at least one invoice in a month. Example: 5 means 5% monthly retrieval.", step: "0.1", min: "0" },
+      { key: "invoices_per_retrieving_subscriber_per_month", label: "Invoices per retrieving subscriber / month", help: "Average number of invoices retrieved by each retrieving subscriber per month.", step: "0.1", min: "0" },
+      { key: "retrieval_gb_per_month", label: "Retrieval volume (GB / month)", help: "Downloaded or restored archive data per month.", step: "0.01", min: "0" },
+      { key: "api_calls_per_month", label: "API calls / month", help: "Upload, search, retrieve and admin API usage.", step: "1", min: "0" },
+      { key: "workflow_executions_per_month", label: "Workflow executions / month", help: "Ingest, retention and governance workflow runs.", step: "1", min: "0" },
+      { key: "workflow_state_transitions_per_exec", label: "Workflow transitions / execution", help: "Average orchestration steps per workflow.", step: "1", min: "0" },
+      { key: "function_invocations_per_month", label: "Function invocations / month", help: "Serverless function executions across ingest and control logic.", step: "1", min: "0" },
+      { key: "function_avg_memory_gb", label: "Function memory (GB)", help: "Average memory allocated to a function run.", step: "0.01", min: "0" },
+      { key: "function_avg_duration_seconds", label: "Function duration (seconds)", help: "Average duration per function execution.", step: "0.01", min: "0" },
+      { key: "metadata_storage_gb", label: "Metadata storage (GB)", help: "Metadata store footprint, separate from object storage.", step: "0.01", min: "0" },
+      { key: "indexed_properties_per_document", label: "Indexed properties / document", help: "How many metadata properties are indexed per document. Example: customer number, address and subscription details.", step: "1", min: "0" },
+      { key: "avg_indexed_property_bytes", label: "Average indexed property size (bytes)", help: "Average stored size per indexed metadata property before search engine overhead.", step: "1", min: "0" },
+      { key: "metadata_read_requests_per_month", label: "Metadata reads / month", help: "Reads on the metadata system of record.", step: "1", min: "0" },
+      { key: "metadata_write_requests_per_month", label: "Metadata writes / month", help: "Writes on the metadata system of record.", step: "1", min: "0" },
+      { key: "search_index_storage_gb", label: "Search index storage (GB)", help: "OpenSearch or equivalent index footprint.", step: "0.01", min: "0" },
+      { key: "search_query_hours_per_month", label: "Search compute hours / month", help: "A rough compute proxy for active search capacity or OCU-like usage.", step: "0.01", min: "0" },
+      { key: "kms_or_keymanager_key_count", label: "Managed keys", help: "Customer-managed keys or key versions in active use.", step: "1", min: "0" },
+      { key: "kms_or_keymanager_requests_per_month", label: "Key requests / month", help: "Encrypt, decrypt, sign or similar key operations.", step: "1", min: "0" },
+      { key: "audit_management_events_per_month", label: "Audit management events / month", help: "Control-plane or management-level audit events.", step: "1", min: "0" },
+      { key: "audit_data_events_per_month", label: "Audit data events / month", help: "Data-level audit events, often expensive at scale.", step: "1", min: "0" },
+      { key: "custom_logs_gb_per_month", label: "Custom logs (GB / month)", help: "Application and custom operational log ingestion.", step: "0.01", min: "0" },
+      { key: "ocr_or_ai_pages_per_month", label: "OCR or AI pages / month", help: "Pages processed for OCR or AI metadata extraction.", step: "1", min: "0" },
+      { key: "aws_cold_tier", label: "AWS cold tier", help: "Select the AWS archive tier for lifecycle transitions.", type: "select", options: [
+        { value: "glacier_flexible", label: "Glacier Flexible Retrieval" },
+        { value: "deep_archive", label: "Glacier Deep Archive" }
+      ]},
+      { key: "scw_cold_tier", label: "Scaleway cold tier", help: "Select the Scaleway lifecycle target tier.", type: "select", options: [
+        { value: "one_zone", label: "Standard One Zone" },
+        { value: "glacier", label: "Glacier" }
+      ]},
+      { key: "monthly_transition_to_cold_gb", label: "Monthly lifecycle transition to cold (GB)", help: "How much data transitions to cold storage each month.", step: "0.01", min: "0" },
+      { key: "monthly_restore_from_cold_gb", label: "Monthly restore from cold (GB)", help: "How much cold data must be restored before access each month.", step: "0.01", min: "0" },
+      { key: "aws_data_transfer_rate_per_gb", label: "AWS egress rate / GB", help: "Editable assumption for AWS internet egress after free tier.", step: "0.001", min: "0" },
+      { key: "aws_manual_monthly_addon", label: "AWS manual monthly add-on", help: "Use this for anything not explicitly modeled yet.", step: "0.01", min: "0" },
+      { key: "scw_postgresql_monthly_plan", label: "Scaleway PostgreSQL monthly plan", help: "Managed PostgreSQL baseline plan assumption.", step: "0.01", min: "0" },
+      { key: "scw_opensearch_monthly_plan", label: "Scaleway OpenSearch monthly plan", help: "Managed OpenSearch baseline plan assumption.", step: "0.01", min: "0" },
+      { key: "scw_containers_monthly_plan", label: "Scaleway containers monthly plan", help: "Baseline cost for always-on API or control-plane containers.", step: "0.01", min: "0" },
+      { key: "scw_queue_ops_per_month", label: "Scaleway queue ops / month", help: "Queue or async message operations for ingest and governance.", step: "1", min: "0" },
+      { key: "scw_audit_trail_monthly_plan", label: "Scaleway audit trail monthly plan", help: "Editable baseline for audit trail retention or setup overhead.", step: "0.01", min: "0" },
+      { key: "scw_manual_monthly_addon", label: "Scaleway manual monthly add-on", help: "Use this for anything not explicitly modeled yet.", step: "0.01", min: "0" }
+    ];
+
+    const importFields = [
+      { key: "historical_import_years", label: "Historical import years", help: "Years of existing documents to import as a one-time migration.", step: "1", min: "0" },
+      { key: "historical_documents_per_year", label: "Historical docs / year", help: "Average annual historical document volume for import modeling.", step: "1", min: "0" },
+      { key: "historical_avg_document_size_mb", label: "Historical avg size (MB)", help: "Average size of the imported historical documents.", step: "0.01", min: "0" },
+      { key: "historical_pages_per_document", label: "Historical pages / document", help: "Average page count per historical document for OCR or AI import costs.", step: "1", min: "0" },
+      { key: "historical_ocr_ratio", label: "Historical OCR ratio", help: "Share of imported historical documents that require OCR or AI metadata extraction. Use 0 to 1.", step: "0.01", min: "0", max: "1" },
+      { key: "import_docs_per_hour", label: "Import throughput (docs / hour)", help: "Estimated sustained throughput for the migration pipeline.", step: "1", min: "1" },
+      { key: "import_hours_per_day", label: "Import hours / day", help: "How many hours per day the migration runs.", step: "1", min: "1", max: "24" },
+      { key: "import_parallel_lanes", label: "Parallel import lanes", help: "Number of parallel migration lanes or workers.", step: "1", min: "1" }
+    ];
+
+    const fields = [...recurringFields, ...importFields];
+
+    const defaults = {
+      documents_ingested_per_month: 25000,
+      avg_document_size_mb: 0.2,
+      pages_per_document: 1,
+      active_storage_gb: 500,
+      cold_archive_storage_gb: 2500,
+      years_before_cold_transition: 2,
+      retention_years_total: 7,
+      subscriber_count: 250000,
+      monthly_subscriber_retrieval_rate_percent: 5,
+      invoices_per_retrieving_subscriber_per_month: 1,
+      retrieval_gb_per_month: 100,
+      api_calls_per_month: 500000,
+      workflow_executions_per_month: 25000,
+      workflow_state_transitions_per_exec: 12,
+      function_invocations_per_month: 750000,
+      function_avg_memory_gb: 0.5,
+      function_avg_duration_seconds: 0.75,
+      metadata_storage_gb: 50,
+      indexed_properties_per_document: 10,
+      avg_indexed_property_bytes: 48,
+      metadata_read_requests_per_month: 3000000,
+      metadata_write_requests_per_month: 1000000,
+      search_index_storage_gb: 100,
+      search_query_hours_per_month: 240,
+      kms_or_keymanager_key_count: 6,
+      kms_or_keymanager_requests_per_month: 500000,
+      audit_management_events_per_month: 150000,
+      audit_data_events_per_month: 2500000,
+      custom_logs_gb_per_month: 80,
+      ocr_or_ai_pages_per_month: 0,
+      aws_cold_tier: "deep_archive",
+      scw_cold_tier: "glacier",
+      monthly_transition_to_cold_gb: 150,
+      monthly_restore_from_cold_gb: 20,
+      historical_import_years: 10,
+      historical_documents_per_year: 2500000,
+      historical_avg_document_size_mb: 0.2,
+      historical_pages_per_document: 1,
+      historical_ocr_ratio: 0.02,
+      import_docs_per_hour: 50000,
+      import_hours_per_day: 16,
+      import_parallel_lanes: 4,
+      aws_data_transfer_rate_per_gb: 0.09,
+      aws_manual_monthly_addon: 0,
+      scw_postgresql_monthly_plan: 60,
+      scw_opensearch_monthly_plan: 150,
+      scw_containers_monthly_plan: 40,
+      scw_queue_ops_per_month: 500000,
+      scw_audit_trail_monthly_plan: 15,
+      scw_manual_monthly_addon: 0
+    };
+
+    const presets = {
+      mvp: {
+        documents_ingested_per_month: 10000,
+        avg_document_size_mb: 0.2,
+        pages_per_document: 1,
+        active_storage_gb: 150,
+        cold_archive_storage_gb: 500,
+        years_before_cold_transition: 1,
+        retention_years_total: 7,
+        subscriber_count: 50000,
+        monthly_subscriber_retrieval_rate_percent: 5,
+        invoices_per_retrieving_subscriber_per_month: 1,
+        retrieval_gb_per_month: 25,
+        api_calls_per_month: 150000,
+        workflow_executions_per_month: 10000,
+        workflow_state_transitions_per_exec: 8,
+        function_invocations_per_month: 200000,
+        function_avg_memory_gb: 0.5,
+        function_avg_duration_seconds: 0.45,
+        metadata_storage_gb: 15,
+        indexed_properties_per_document: 10,
+        avg_indexed_property_bytes: 40,
+        metadata_read_requests_per_month: 500000,
+        metadata_write_requests_per_month: 250000,
+        search_index_storage_gb: 25,
+        search_query_hours_per_month: 100,
+        kms_or_keymanager_key_count: 4,
+        kms_or_keymanager_requests_per_month: 120000,
+        audit_management_events_per_month: 50000,
+        audit_data_events_per_month: 400000,
+        custom_logs_gb_per_month: 20,
+        ocr_or_ai_pages_per_month: 0,
+        aws_cold_tier: "glacier_flexible",
+        scw_cold_tier: "one_zone",
+        monthly_transition_to_cold_gb: 40,
+        monthly_restore_from_cold_gb: 4,
+        historical_import_years: 10,
+        historical_documents_per_year: 500000,
+        historical_avg_document_size_mb: 0.2,
+        historical_pages_per_document: 1,
+        historical_ocr_ratio: 0.01,
+        import_docs_per_hour: 25000,
+        import_hours_per_day: 8,
+        import_parallel_lanes: 2,
+        aws_data_transfer_rate_per_gb: 0.09,
+        aws_manual_monthly_addon: 0,
+        scw_postgresql_monthly_plan: 35,
+        scw_opensearch_monthly_plan: 75,
+        scw_containers_monthly_plan: 20,
+        scw_queue_ops_per_month: 150000,
+        scw_audit_trail_monthly_plan: 10,
+        scw_manual_monthly_addon: 0
+      },
+      compliance: {
+        documents_ingested_per_month: 40000,
+        avg_document_size_mb: 0.2,
+        pages_per_document: 1,
+        active_storage_gb: 800,
+        cold_archive_storage_gb: 5000,
+        years_before_cold_transition: 2,
+        retention_years_total: 7,
+        subscriber_count: 350000,
+        monthly_subscriber_retrieval_rate_percent: 5,
+        invoices_per_retrieving_subscriber_per_month: 1.2,
+        retrieval_gb_per_month: 160,
+        api_calls_per_month: 900000,
+        workflow_executions_per_month: 50000,
+        workflow_state_transitions_per_exec: 16,
+        function_invocations_per_month: 1200000,
+        function_avg_memory_gb: 0.75,
+        function_avg_duration_seconds: 0.9,
+        metadata_storage_gb: 90,
+        indexed_properties_per_document: 10,
+        avg_indexed_property_bytes: 56,
+        metadata_read_requests_per_month: 6000000,
+        metadata_write_requests_per_month: 2200000,
+        search_index_storage_gb: 180,
+        search_query_hours_per_month: 360,
+        kms_or_keymanager_key_count: 10,
+        kms_or_keymanager_requests_per_month: 1200000,
+        audit_management_events_per_month: 300000,
+        audit_data_events_per_month: 8000000,
+        custom_logs_gb_per_month: 180,
+        ocr_or_ai_pages_per_month: 0,
+        aws_cold_tier: "deep_archive",
+        scw_cold_tier: "glacier",
+        monthly_transition_to_cold_gb: 250,
+        monthly_restore_from_cold_gb: 40,
+        historical_import_years: 10,
+        historical_documents_per_year: 3000000,
+        historical_avg_document_size_mb: 0.2,
+        historical_pages_per_document: 1,
+        historical_ocr_ratio: 0.03,
+        import_docs_per_hour: 40000,
+        import_hours_per_day: 16,
+        import_parallel_lanes: 4,
+        aws_data_transfer_rate_per_gb: 0.09,
+        aws_manual_monthly_addon: 0,
+        scw_postgresql_monthly_plan: 95,
+        scw_opensearch_monthly_plan: 220,
+        scw_containers_monthly_plan: 85,
+        scw_queue_ops_per_month: 1200000,
+        scw_audit_trail_monthly_plan: 25,
+        scw_manual_monthly_addon: 0
+      },
+      migration: {
+        documents_ingested_per_month: 200000,
+        avg_document_size_mb: 0.2,
+        pages_per_document: 1,
+        active_storage_gb: 3000,
+        cold_archive_storage_gb: 12000,
+        years_before_cold_transition: 1,
+        retention_years_total: 10,
+        subscriber_count: 800000,
+        monthly_subscriber_retrieval_rate_percent: 6,
+        invoices_per_retrieving_subscriber_per_month: 1.3,
+        retrieval_gb_per_month: 300,
+        api_calls_per_month: 1400000,
+        workflow_executions_per_month: 220000,
+        workflow_state_transitions_per_exec: 14,
+        function_invocations_per_month: 2800000,
+        function_avg_memory_gb: 1,
+        function_avg_duration_seconds: 1.4,
+        metadata_storage_gb: 250,
+        indexed_properties_per_document: 10,
+        avg_indexed_property_bytes: 64,
+        metadata_read_requests_per_month: 10000000,
+        metadata_write_requests_per_month: 6000000,
+        search_index_storage_gb: 500,
+        search_query_hours_per_month: 420,
+        kms_or_keymanager_key_count: 10,
+        kms_or_keymanager_requests_per_month: 2600000,
+        audit_management_events_per_month: 400000,
+        audit_data_events_per_month: 12000000,
+        custom_logs_gb_per_month: 350,
+        ocr_or_ai_pages_per_month: 0,
+        aws_cold_tier: "deep_archive",
+        scw_cold_tier: "glacier",
+        monthly_transition_to_cold_gb: 1200,
+        monthly_restore_from_cold_gb: 120,
+        historical_import_years: 10,
+        historical_documents_per_year: 5000000,
+        historical_avg_document_size_mb: 0.2,
+        historical_pages_per_document: 1,
+        historical_ocr_ratio: 0.08,
+        import_docs_per_hour: 60000,
+        import_hours_per_day: 20,
+        import_parallel_lanes: 8,
+        aws_data_transfer_rate_per_gb: 0.09,
+        aws_manual_monthly_addon: 0,
+        scw_postgresql_monthly_plan: 140,
+        scw_opensearch_monthly_plan: 320,
+        scw_containers_monthly_plan: 140,
+        scw_queue_ops_per_month: 4000000,
+        scw_audit_trail_monthly_plan: 30,
+        scw_manual_monthly_addon: 0
+      },
+      highvolume: {
+        documents_ingested_per_month: 2083333,
+        avg_document_size_mb: 0.2,
+        pages_per_document: 1,
+        active_storage_gb: 8000,
+        cold_archive_storage_gb: 45000,
+        years_before_cold_transition: 2,
+        retention_years_total: 7,
+        subscriber_count: 2500000,
+        monthly_subscriber_retrieval_rate_percent: 5,
+        invoices_per_retrieving_subscriber_per_month: 1,
+        retrieval_gb_per_month: 36,
+        api_calls_per_month: 6000000,
+        workflow_executions_per_month: 2200000,
+        workflow_state_transitions_per_exec: 10,
+        function_invocations_per_month: 7500000,
+        function_avg_memory_gb: 0.35,
+        function_avg_duration_seconds: 0.25,
+        metadata_storage_gb: 1200,
+        indexed_properties_per_document: 10,
+        avg_indexed_property_bytes: 48,
+        metadata_read_requests_per_month: 30000000,
+        metadata_write_requests_per_month: 10000000,
+        search_index_storage_gb: 2500,
+        search_query_hours_per_month: 720,
+        kms_or_keymanager_key_count: 12,
+        kms_or_keymanager_requests_per_month: 12000000,
+        audit_management_events_per_month: 800000,
+        audit_data_events_per_month: 15000000,
+        custom_logs_gb_per_month: 800,
+        ocr_or_ai_pages_per_month: 0,
+        aws_cold_tier: "deep_archive",
+        scw_cold_tier: "glacier",
+        monthly_transition_to_cold_gb: 3500,
+        monthly_restore_from_cold_gb: 180,
+        historical_import_years: 10,
+        historical_documents_per_year: 2500000,
+        historical_avg_document_size_mb: 0.2,
+        historical_pages_per_document: 1,
+        historical_ocr_ratio: 0.02,
+        import_docs_per_hour: 80000,
+        import_hours_per_day: 20,
+        import_parallel_lanes: 6,
+        aws_data_transfer_rate_per_gb: 0.09,
+        aws_manual_monthly_addon: 0,
+        scw_postgresql_monthly_plan: 350,
+        scw_opensearch_monthly_plan: 700,
+        scw_containers_monthly_plan: 240,
+        scw_queue_ops_per_month: 15000000,
+        scw_audit_trail_monthly_plan: 50,
+        scw_manual_monthly_addon: 0
+      }
+    };
+
+    const scenarioMeta = {
+      custom: {
+        title: "Scenario: Custom",
+        description: "You are editing the current working assumptions directly. Use a preset to jump to a reference profile from the calculator model."
+      },
+      mvp: {
+        title: "Scenario: MVP",
+        description: "Baseline archive setup with moderate ingest, limited retrieval, low AI usage and a metadata-first search index rather than full-document indexing."
+      },
+      compliance: {
+        title: "Scenario: Compliance-heavy",
+        description: "Higher audit depth, heavier search usage, stricter governance workflows and more cost pressure in logs, orchestration and metadata search."
+      },
+      migration: {
+        title: "Scenario: Migration-heavy",
+        description: "Bulk historical ingest with large storage growth and heavy OCR or AI metadata extraction. Temporary migration costs dominate more than steady-state storage."
+      },
+      highvolume: {
+        title: "Scenario: 25M invoices / year",
+        description: "High-volume archive around 25 million invoices per year, with roughly 5% retrieval behavior and a metadata-property search model instead of full-document indexing."
+      }
+    };
+
+    let activeScenario = "custom";
+
+    const awsColdTierConfig = {
+      glacier_flexible: {
+        label: "Glacier Flexible Retrieval",
+        storageRate: 0.0036,
+        transitionRate: 0.006,
+        restoreRate: 0.02,
+        restoreLatencyHours: 4
+      },
+      deep_archive: {
+        label: "Glacier Deep Archive",
+        storageRate: 0.00099,
+        transitionRate: 0.01,
+        restoreRate: 0.03,
+        restoreLatencyHours: 12
+      }
+    };
+
+    const scwColdTierConfig = {
+      one_zone: {
+        label: "Standard One Zone",
+        storageRate: 0.00752,
+        transitionRate: 0.004,
+        restoreRate: 0,
+        restoreLatencyHours: 0
+      },
+      glacier: {
+        label: "Glacier",
+        storageRate: 0.00254,
+        transitionRate: 0.008,
+        restoreRate: 0.018,
+        restoreLatencyHours: 8
+      }
+    };
+
+    const autoModelFactors = {
+      apiCallsPerDocument: 20,
+      workflowExecutionsPerDocument: 1,
+      functionInvocationsPerDocument: 30,
+      metadataReadsPerDocument: 120,
+      metadataWritesPerDocument: 40,
+      searchQueryHoursPerDocument: 0.0096,
+      kmsRequestsPerDocument: 20,
+      auditManagementEventsPerDocument: 6,
+      auditDataEventsPerDocument: 100,
+      metadataStorageFractionOfRetainedData: 1 / 60,
+      searchIndexExpansionFactor: 2.5
+    };
+
+    const derivedFieldKeys = [
+      "active_storage_gb",
+      "cold_archive_storage_gb",
+      "retrieval_gb_per_month",
+      "api_calls_per_month",
+      "workflow_executions_per_month",
+      "function_invocations_per_month",
+      "metadata_storage_gb",
+      "metadata_read_requests_per_month",
+      "metadata_write_requests_per_month",
+      "search_index_storage_gb",
+      "search_query_hours_per_month",
+      "kms_or_keymanager_requests_per_month",
+      "audit_management_events_per_month",
+      "audit_data_events_per_month",
+      "monthly_transition_to_cold_gb",
+      "monthly_restore_from_cold_gb"
+    ];
+
+    function formatMoney(value, currency) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    function formatNumber(value, decimals = 0) {
+      return new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      }).format(value);
+    }
+
+    function formatStorage(valueGb) {
+      if (valueGb >= 1024 * 1024) {
+        return `${formatNumber(valueGb / (1024 * 1024), 2)} PB`;
+      }
+      if (valueGb >= 1024) {
+        return `${formatNumber(valueGb / 1024, 2)} TB`;
+      }
+      return `${formatNumber(valueGb, 2)} GB`;
+    }
+
+    function renderFieldGroup(containerId, fieldList) {
+      const grid = document.getElementById(containerId);
+      grid.innerHTML = "";
+
+      fieldList.forEach((field) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "field";
+
+        const label = document.createElement("label");
+        label.setAttribute("for", field.key);
+        label.textContent = field.label;
+
+        const help = document.createElement("small");
+        help.textContent = field.help;
+
+        let control;
+        if (field.type === "select") {
+          control = document.createElement("select");
+          control.id = field.key;
+          control.name = field.key;
+          field.options.forEach((option) => {
+            const optionNode = document.createElement("option");
+            optionNode.value = option.value;
+            optionNode.textContent = option.label;
+            if (defaults[field.key] === option.value) {
+              optionNode.selected = true;
+            }
+            control.appendChild(optionNode);
+          });
+          control.addEventListener("change", () => {
+            activeScenario = "custom";
+            recalculate();
+          });
+        } else {
+          control = document.createElement("input");
+          control.type = "number";
+          control.id = field.key;
+          control.name = field.key;
+          control.step = field.step;
+          control.min = field.min;
+          if (field.max !== undefined) control.max = field.max;
+          control.value = defaults[field.key];
+          control.addEventListener("input", () => {
+            activeScenario = "custom";
+            recalculate();
+          });
+        }
+
+        wrapper.append(label, help, control);
+        grid.appendChild(wrapper);
+      });
+    }
+
+    function renderFields() {
+      renderFieldGroup("input-grid", recurringFields);
+      renderFieldGroup("import-input-grid", importFields);
+    }
+
+    function setFieldValue(key, value) {
+      const input = document.getElementById(key);
+      if (!input) return;
+      if (input.tagName === "SELECT") {
+        input.value = value;
+      } else {
+        input.value = Number.isFinite(value) ? String(value) : String(value ?? "");
+      }
+    }
+
+    function applyAutoScaleModel() {
+      const enabled = document.getElementById("auto-scale-model")?.checked;
+      if (!enabled) return;
+
+      const docsPerMonth = Number(document.getElementById("documents_ingested_per_month").value || 0);
+      const avgSizeMb = Number(document.getElementById("avg_document_size_mb").value || 0);
+      const hotYears = Number(document.getElementById("years_before_cold_transition").value || 0);
+      const retentionYears = Number(document.getElementById("retention_years_total").value || 0);
+      const subscriberCount = Number(document.getElementById("subscriber_count").value || 0);
+      const monthlySubscriberRetrievalRate = Number(document.getElementById("monthly_subscriber_retrieval_rate_percent").value || 0) / 100;
+      const invoicesPerRetrievingSubscriber = Number(document.getElementById("invoices_per_retrieving_subscriber_per_month").value || 0);
+      const indexedPropertiesPerDocument = Number(document.getElementById("indexed_properties_per_document").value || 0);
+      const avgIndexedPropertyBytes = Number(document.getElementById("avg_indexed_property_bytes").value || 0);
+
+      const monthlyIngestGb = docsPerMonth * avgSizeMb / 1024;
+      const hotStorageGb = monthlyIngestGb * 12 * hotYears;
+      const coldYears = Math.max(0, retentionYears - hotYears);
+      const coldStorageGb = monthlyIngestGb * 12 * coldYears;
+      const totalRetainedGb = hotStorageGb + coldStorageGb;
+      const monthlyRetrievedDocuments =
+        subscriberCount * monthlySubscriberRetrievalRate * invoicesPerRetrievingSubscriber;
+      const retrievalGbPerMonth = monthlyRetrievedDocuments * avgSizeMb / 1024;
+      const retainedDocuments = docsPerMonth * 12 * retentionYears;
+      const searchIndexStorageGb =
+        (
+          retainedDocuments
+          * indexedPropertiesPerDocument
+          * avgIndexedPropertyBytes
+          * autoModelFactors.searchIndexExpansionFactor
+        ) / (1024 * 1024 * 1024);
+      const coldFraction = totalRetainedGb > 0 ? coldStorageGb / totalRetainedGb : 0;
+      const restoreFromColdGb = retrievalGbPerMonth * coldFraction;
+      const transitionToColdGb = coldYears > 0 ? monthlyIngestGb : 0;
+
+      const derivedValues = {
+        active_storage_gb: hotStorageGb,
+        cold_archive_storage_gb: coldStorageGb,
+        retrieval_gb_per_month: retrievalGbPerMonth,
+        api_calls_per_month: docsPerMonth * autoModelFactors.apiCallsPerDocument,
+        workflow_executions_per_month: docsPerMonth * autoModelFactors.workflowExecutionsPerDocument,
+        function_invocations_per_month: docsPerMonth * autoModelFactors.functionInvocationsPerDocument,
+        metadata_storage_gb: totalRetainedGb * autoModelFactors.metadataStorageFractionOfRetainedData,
+        metadata_read_requests_per_month: docsPerMonth * autoModelFactors.metadataReadsPerDocument,
+        metadata_write_requests_per_month: docsPerMonth * autoModelFactors.metadataWritesPerDocument,
+        search_index_storage_gb: searchIndexStorageGb,
+        search_query_hours_per_month: Math.max(24, docsPerMonth * autoModelFactors.searchQueryHoursPerDocument),
+        kms_or_keymanager_requests_per_month: docsPerMonth * autoModelFactors.kmsRequestsPerDocument,
+        audit_management_events_per_month: docsPerMonth * autoModelFactors.auditManagementEventsPerDocument,
+        audit_data_events_per_month: docsPerMonth * autoModelFactors.auditDataEventsPerDocument,
+        monthly_transition_to_cold_gb: transitionToColdGb,
+        monthly_restore_from_cold_gb: restoreFromColdGb
+      };
+
+      Object.entries(derivedValues).forEach(([key, value]) => setFieldValue(key, Number(value.toFixed(2))));
+    }
+
+    function getInputs() {
+      const values = {};
+      fields.forEach((field) => {
+        const raw = document.getElementById(field.key).value;
+        values[field.key] = field.type === "select" ? raw : Number(raw || 0);
+      });
+      return values;
+    }
+
+    function breakdownLine(name, monthly, note = "") {
+      return { name, monthly: Math.max(0, monthly), yearly: Math.max(0, monthly) * 12, note };
+    }
+
+    function calculateAws(v) {
+      const monthlyIngestGb = v.documents_ingested_per_month * v.avg_document_size_mb / 1024;
+      const workflowTransitions = v.workflow_executions_per_month * v.workflow_state_transitions_per_exec;
+      const functionGbSeconds = v.function_invocations_per_month * v.function_avg_memory_gb * v.function_avg_duration_seconds;
+      const coldTier = awsColdTierConfig[v.aws_cold_tier] || awsColdTierConfig.deep_archive;
+
+      const lines = [
+        breakdownLine(
+          "S3 hot storage",
+          v.active_storage_gb * 0.023,
+          "Assumption: S3 Standard storage at $0.023/GB-month."
+        ),
+        breakdownLine(
+          "S3 cold archive storage",
+          v.cold_archive_storage_gb * coldTier.storageRate,
+          `Assumption: ${coldTier.label} storage rate.`
+        ),
+        breakdownLine(
+          "S3 lifecycle transition requests",
+          v.monthly_transition_to_cold_gb * coldTier.transitionRate,
+          `Placeholder for lifecycle transition request cost and operational overhead into ${coldTier.label}.`
+        ),
+        breakdownLine(
+          "S3 cold restore requests",
+          v.monthly_restore_from_cold_gb * coldTier.restoreRate,
+          `Placeholder for restore request and temporary restored access overhead from ${coldTier.label}.`
+        ),
+        breakdownLine(
+          "S3 data transfer out",
+          Math.max(0, v.retrieval_gb_per_month - 100) * v.aws_data_transfer_rate_per_gb,
+          "Editable assumption after first 100 GB/month free-tier style allowance."
+        ),
+        breakdownLine(
+          "API Gateway",
+          v.api_calls_per_month / 1000000 * 1.0,
+          "HTTP API starter rate at $1.00 per million requests."
+        ),
+        breakdownLine(
+          "Lambda requests",
+          v.function_invocations_per_month / 1000000 * 0.20,
+          "Starter request pricing."
+        ),
+        breakdownLine(
+          "Lambda compute",
+          functionGbSeconds * 0.0000167,
+          "GB-seconds priced at $0.0000167."
+        ),
+        breakdownLine(
+          "Step Functions",
+          Math.max(0, workflowTransitions - 4000) * 0.000025,
+          "Starter state-transition pricing with first 4,000 free."
+        ),
+        breakdownLine(
+          "DynamoDB metadata storage",
+          v.metadata_storage_gb * 0.25,
+          "Approximation using $0.25/GB-month."
+        ),
+        breakdownLine(
+          "DynamoDB reads and writes",
+          (v.metadata_read_requests_per_month / 1000000 * 0.125) +
+          (v.metadata_write_requests_per_month / 1000000 * 0.625),
+          "Simplified on-demand estimate for request volume."
+        ),
+        breakdownLine(
+          "KMS key storage",
+          v.kms_or_keymanager_key_count * 1.0,
+          "$1 per key per month."
+        ),
+        breakdownLine(
+          "KMS requests",
+          Math.max(0, v.kms_or_keymanager_requests_per_month - 20000) / 10000 * 0.03,
+          "$0.03 per 10,000 requests after 20,000 free."
+        ),
+        breakdownLine(
+          "CloudTrail management events",
+          Math.max(0, v.audit_management_events_per_month - 100000) / 100000 * 2.0,
+          "Approximation for extra paid management event copies."
+        ),
+        breakdownLine(
+          "CloudTrail data events",
+          v.audit_data_events_per_month / 100000 * 0.10,
+          "$0.10 per 100,000 data events."
+        ),
+        breakdownLine(
+          "CloudWatch logs ingestion",
+          v.custom_logs_gb_per_month * 0.50,
+          "Approximation using $0.50/GB custom log ingestion."
+        ),
+        breakdownLine(
+          "OpenSearch storage",
+          v.search_index_storage_gb * 0.02,
+          "Serverless-style storage estimate at $0.02/GB-month."
+        ),
+        breakdownLine(
+          "OpenSearch compute",
+          v.search_query_hours_per_month * 0.24,
+          "OCU-hour style estimate at $0.24/hour."
+        ),
+        breakdownLine(
+          "Textract or AI metadata extraction",
+          v.ocr_or_ai_pages_per_month * 0.015,
+          "Conservative table-style rate proxy at $0.015/page."
+        ),
+        breakdownLine(
+          "Manual add-on",
+          v.aws_manual_monthly_addon,
+          "Use for items not explicitly modeled yet."
+        )
+      ];
+
+      const total = lines.reduce((sum, line) => sum + line.monthly, 0);
+      const storageMonthly =
+        lines
+          .filter((line) => ["S3 hot storage", "S3 cold archive storage", "S3 lifecycle transition requests", "S3 cold restore requests", "S3 data transfer out"].includes(line.name))
+          .reduce((sum, line) => sum + line.monthly, 0);
+      const hotStorageMonthly = lines.find((line) => line.name === "S3 hot storage")?.monthly ?? 0;
+      const coldStorageMonthly = lines.find((line) => line.name === "S3 cold archive storage")?.monthly ?? 0;
+      const transitionMonthly = lines.find((line) => line.name === "S3 lifecycle transition requests")?.monthly ?? 0;
+      const restoreMonthly = lines.find((line) => line.name === "S3 cold restore requests")?.monthly ?? 0;
+
+      return {
+        total,
+        yearly: total * 12,
+        lines,
+        storageMonthly,
+        storageYearly: storageMonthly * 12,
+        lifecycle: {
+          coldTier: coldTier.label,
+          hotStorageMonthly,
+          coldStorageMonthly,
+          transitionMonthly,
+          restoreMonthly,
+          restoreLatencyHours: coldTier.restoreLatencyHours
+        },
+        metrics: {
+          monthlyIngestGb,
+          workflowTransitions,
+          functionGbSeconds,
+          storageFootprintGb: v.active_storage_gb + v.cold_archive_storage_gb
+        }
+      };
+    }
+
+    function calculateImport(v) {
+      const historicalDocuments =
+        v.historical_import_years * v.historical_documents_per_year;
+      const historicalStorageGb =
+        historicalDocuments * v.historical_avg_document_size_mb / 1024;
+      const historicalOcrPages =
+        historicalDocuments * v.historical_pages_per_document * v.historical_ocr_ratio;
+      const yearlyStorageGrowthGb =
+        v.documents_ingested_per_month * 12 * v.avg_document_size_mb / 1024;
+      const completedMigrationFootprintGb =
+        historicalStorageGb + v.active_storage_gb + v.cold_archive_storage_gb;
+      const importDocsPerDay =
+        v.import_docs_per_hour * v.import_hours_per_day * v.import_parallel_lanes;
+      const importDurationDays =
+        importDocsPerDay > 0 ? historicalDocuments / importDocsPerDay : 0;
+      const awsBreakdown = {
+        storageLoad: historicalStorageGb * 0.023,
+        metadataBackfill: (historicalDocuments * 2 / 1000000) * 0.625,
+        indexBackfill: historicalStorageGb * 0.02,
+        aiEnrichment: historicalOcrPages * 0.015,
+        migrationCompute: (historicalDocuments / 1000000 * 0.20) + (historicalDocuments / 1000000 * 1.0)
+      };
+
+      const scwBreakdown = {
+        storageLoad: historicalStorageGb * 0.0146,
+        metadataBackfill: historicalStorageGb * 0.20,
+        indexBackfill: historicalStorageGb * 0.08,
+        aiEnrichment: historicalOcrPages / 1000 * 8,
+        migrationCompute: (historicalDocuments / 1000000 * 0.15) + (historicalDocuments / 1000000 * 0.75)
+      };
+
+      const awsImport = Object.values(awsBreakdown).reduce((sum, value) => sum + value, 0);
+      const scwImport = Object.values(scwBreakdown).reduce((sum, value) => sum + value, 0);
+
+      return {
+        historicalDocuments,
+        historicalStorageGb,
+        historicalOcrPages,
+        awsImport,
+        scwImport,
+        awsBreakdown,
+        scwBreakdown,
+        yearlyStorageGrowthGb,
+        completedMigrationFootprintGb,
+        importDocsPerDay,
+        importDurationDays
+      };
+    }
+
+    function calculateScaleway(v) {
+      const monthlyIngestGb = v.documents_ingested_per_month * v.avg_document_size_mb / 1024;
+      const workflowTransitions = v.workflow_executions_per_month * v.workflow_state_transitions_per_exec;
+      const functionGbSeconds = v.function_invocations_per_month * v.function_avg_memory_gb * v.function_avg_duration_seconds;
+      const coldTier = scwColdTierConfig[v.scw_cold_tier] || scwColdTierConfig.glacier;
+
+      const lines = [
+        breakdownLine(
+          "Object Storage hot storage",
+          v.active_storage_gb * 0.0146,
+          "Standard Multi-AZ estimate at €0.0146/GB-month."
+        ),
+        breakdownLine(
+          "Object Storage cold archive",
+          v.cold_archive_storage_gb * coldTier.storageRate,
+          `Assumption: ${coldTier.label} storage rate.`
+        ),
+        breakdownLine(
+          "Lifecycle transition operations",
+          v.monthly_transition_to_cold_gb * coldTier.transitionRate,
+          `Placeholder for lifecycle transition operations and overhead into ${coldTier.label}.`
+        ),
+        breakdownLine(
+          "Cold restore operations",
+          v.monthly_restore_from_cold_gb * coldTier.restoreRate,
+          coldTier.restoreLatencyHours > 0
+            ? `Placeholder for restore operations and temporary access overhead from ${coldTier.label}.`
+            : `${coldTier.label} is modeled as directly available without restore delay.`
+        ),
+        breakdownLine(
+          "Object Storage egress",
+          Math.max(0, v.retrieval_gb_per_month - 75) * 0.01,
+          "€0.01/GB after first 75 GB."
+        ),
+        breakdownLine(
+          "Serverless Functions requests",
+          Math.max(0, v.function_invocations_per_month - 1000000) / 1000000 * 0.15,
+          "€0.15 per million requests after 1M free."
+        ),
+        breakdownLine(
+          "Serverless Functions compute",
+          Math.max(0, functionGbSeconds - 400000) / 100000 * 1.2,
+          "€1.2 per 100,000 GB-seconds after 400,000 GB-s free."
+        ),
+        breakdownLine(
+          "Managed PostgreSQL plan",
+          v.scw_postgresql_monthly_plan,
+          "Editable baseline placeholder for metadata system of record."
+        ),
+        breakdownLine(
+          "Managed OpenSearch plan",
+          v.scw_opensearch_monthly_plan,
+          "Editable baseline placeholder for search and retrieval."
+        ),
+        breakdownLine(
+          "Serverless Containers baseline",
+          v.scw_containers_monthly_plan,
+          "Editable baseline placeholder for API and control-plane containers."
+        ),
+        breakdownLine(
+          "Managed PostgreSQL storage overhead",
+          v.metadata_storage_gb * 0.20,
+          "Placeholder for metadata storage growth beyond the base database plan."
+        ),
+        breakdownLine(
+          "OpenSearch storage overhead",
+          v.search_index_storage_gb * 0.08,
+          "Placeholder for additional search storage pressure beyond the base plan."
+        ),
+        breakdownLine(
+          "Key Manager keys",
+          v.kms_or_keymanager_key_count * 0.04,
+          "€0.04 per key version per month."
+        ),
+        breakdownLine(
+          "Key Manager requests",
+          v.kms_or_keymanager_requests_per_month / 10000 * 0.03,
+          "€0.03 per 10,000 requests."
+        ),
+        breakdownLine(
+          "Cockpit logs",
+          v.custom_logs_gb_per_month * 0.35,
+          "Approximation using €0.35/GB custom logs."
+        ),
+        breakdownLine(
+          "Audit Trail baseline",
+          v.scw_audit_trail_monthly_plan,
+          "Editable baseline for Audit Trail setup and retained audit footprint."
+        ),
+        breakdownLine(
+          "Queues and async messaging",
+          v.scw_queue_ops_per_month / 1000000 * 0.75,
+          "Placeholder for queue-heavy ingest and governance traffic."
+        ),
+        breakdownLine(
+          "Workflow orchestration overhead",
+          workflowTransitions / 100000 * 1.5,
+          "Placeholder for queue, scheduler and control-plane overhead."
+        ),
+        breakdownLine(
+          "AI metadata extraction add-on",
+          v.ocr_or_ai_pages_per_month / 1000 * 8,
+          "Placeholder until the OCR or AI service path is fixed."
+        ),
+        breakdownLine(
+          "Manual add-on",
+          v.scw_manual_monthly_addon,
+          "Use for items not explicitly modeled yet."
+        )
+      ];
+
+      const total = lines.reduce((sum, line) => sum + line.monthly, 0);
+      const storageMonthly =
+        lines
+          .filter((line) => ["Object Storage hot storage", "Object Storage cold archive", "Lifecycle transition operations", "Cold restore operations", "Object Storage egress"].includes(line.name))
+          .reduce((sum, line) => sum + line.monthly, 0);
+      const hotStorageMonthly = lines.find((line) => line.name === "Object Storage hot storage")?.monthly ?? 0;
+      const coldStorageMonthly = lines.find((line) => line.name === "Object Storage cold archive")?.monthly ?? 0;
+      const transitionMonthly = lines.find((line) => line.name === "Lifecycle transition operations")?.monthly ?? 0;
+      const restoreMonthly = lines.find((line) => line.name === "Cold restore operations")?.monthly ?? 0;
+
+      return {
+        total,
+        yearly: total * 12,
+        lines,
+        storageMonthly,
+        storageYearly: storageMonthly * 12,
+        lifecycle: {
+          coldTier: coldTier.label,
+          hotStorageMonthly,
+          coldStorageMonthly,
+          transitionMonthly,
+          restoreMonthly,
+          restoreLatencyHours: coldTier.restoreLatencyHours
+        },
+        metrics: {
+          monthlyIngestGb,
+          workflowTransitions,
+          functionGbSeconds,
+          storageFootprintGb: v.active_storage_gb + v.cold_archive_storage_gb
+        }
+      };
+    }
+
+    function renderBreakdown(containerId, lines, currency) {
+      const tbody = document.getElementById(containerId);
+      tbody.innerHTML = "";
+
+      lines.forEach((line) => {
+        const tr = document.createElement("tr");
+
+        const left = document.createElement("td");
+        left.innerHTML = `<span class="line-name">${line.name}</span>${line.note ? `<span class="line-note">${line.note}</span>` : ""}`;
+
+        const monthly = document.createElement("td");
+        monthly.textContent = formatMoney(line.monthly, currency);
+
+        const yearly = document.createElement("td");
+        yearly.textContent = formatMoney(line.yearly, currency);
+
+        tr.append(left, monthly, yearly);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawCostDriverChart(canvasId, lines, color) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const topLines = [...lines]
+        .filter((line) => line.monthly > 0)
+        .sort((a, b) => b.monthly - a.monthly)
+        .slice(0, 6);
+
+      const { width, height } = canvas;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#fffdf9";
+      ctx.fillRect(0, 0, width, height);
+
+      const left = 180;
+      const right = width - 20;
+      const top = 24;
+      const rowHeight = 36;
+      const barHeight = 14;
+      const maxValue = Math.max(...topLines.map((line) => line.monthly), 1);
+
+      ctx.font = "12px Avenir Next, Avenir, Segoe UI, sans-serif";
+      ctx.fillStyle = "#646b73";
+
+      topLines.forEach((line, index) => {
+        const y = top + index * rowHeight;
+        const barWidth = ((right - left) * line.monthly) / maxValue;
+
+        ctx.fillStyle = "#646b73";
+        ctx.fillText(line.name, 16, y + 10);
+
+        ctx.fillStyle = "rgba(222, 210, 191, 0.75)";
+        ctx.fillRect(left, y, right - left, barHeight);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(left, y, barWidth, barHeight);
+
+        ctx.fillStyle = "#1f2328";
+        ctx.fillText(line.monthly.toFixed(2), left + barWidth + 8, y + 10);
+      });
+    }
+
+    function updateFxPanel() {
+      document.getElementById("fx-title").textContent =
+        `FX normalization: 1 USD = ${formatNumber(fxState.usdToEur, 4)} EUR | 1 EUR = ${formatNumber(fxState.eurToUsd, 4)} USD`;
+      document.getElementById("fx-note").textContent =
+        `${fxState.source} rate on ${fxState.date}. If the startup lookup fails, the calculator uses a fallback rate.`;
+    }
+
+    async function loadExchangeRate() {
+      updateFxPanel();
+
+      try {
+        const response = await fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR");
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const usdToEur = Number(data?.rates?.EUR);
+        if (!Number.isFinite(usdToEur) || usdToEur <= 0) {
+          throw new Error("Invalid FX payload");
+        }
+
+        fxState.usdToEur = usdToEur;
+        fxState.eurToUsd = 1 / usdToEur;
+        fxState.source = "Frankfurter (ECB reference data)";
+        fxState.date = data.date || "latest";
+      } catch (error) {
+        fxState.source = "Fallback";
+        fxState.date = "startup fallback";
+      }
+
+      updateFxPanel();
+      recalculate();
+    }
+
+    function recalculate() {
+      applyAutoScaleModel();
+      const inputs = getInputs();
+      const aws = calculateAws(inputs);
+      const scw = calculateScaleway(inputs);
+      const importModel = calculateImport(inputs);
+      const scenario = scenarioMeta[activeScenario] || scenarioMeta.custom;
+
+      document.getElementById("aws-monthly").textContent = formatMoney(aws.total, "USD");
+      document.getElementById("aws-yearly").textContent = formatMoney(aws.yearly, "USD");
+      document.getElementById("scw-monthly").textContent = formatMoney(scw.total, "EUR");
+      document.getElementById("scw-yearly").textContent = formatMoney(scw.yearly, "EUR");
+      document.getElementById("aws-storage-footprint").textContent = formatStorage(aws.metrics.storageFootprintGb);
+      document.getElementById("scw-storage-footprint").textContent = formatStorage(scw.metrics.storageFootprintGb);
+      document.getElementById("aws-storage-yearly").textContent = formatMoney(aws.storageYearly, "USD");
+      document.getElementById("scw-storage-yearly").textContent = formatMoney(scw.storageYearly, "EUR");
+      document.getElementById("scenario-title").textContent = scenario.title;
+      document.getElementById("scenario-description").textContent = scenario.description;
+
+      document.getElementById("monthly-ingest-gb").textContent = `${formatNumber(aws.metrics.monthlyIngestGb, 2)} GB`;
+      document.getElementById("workflow-transitions").textContent = formatNumber(aws.metrics.workflowTransitions, 0);
+      document.getElementById("function-gb-seconds").textContent = formatNumber(aws.metrics.functionGbSeconds, 0);
+      document.getElementById("normalized-aws-eur").textContent = formatMoney(aws.total * fxState.usdToEur, "EUR");
+      document.getElementById("normalized-scw-usd").textContent = formatMoney(scw.total * fxState.eurToUsd, "USD");
+      document.getElementById("retrieval-share").textContent =
+        `${formatNumber(aws.metrics.monthlyIngestGb > 0 ? (inputs.retrieval_gb_per_month / aws.metrics.monthlyIngestGb) * 100 : 0, 1)}%`;
+      document.getElementById("yearly-storage-growth").textContent = formatStorage(importModel.yearlyStorageGrowthGb);
+      document.getElementById("completed-migration-footprint").textContent = formatStorage(importModel.completedMigrationFootprintGb);
+      document.getElementById("import-duration").textContent =
+        importModel.importDurationDays >= 365
+          ? `${formatNumber(importModel.importDurationDays / 365, 1)} years`
+          : `${formatNumber(importModel.importDurationDays, 1)} days`;
+      document.getElementById("import-storage-footprint").textContent = formatStorage(importModel.historicalStorageGb);
+      document.getElementById("import-total-documents").textContent = formatNumber(importModel.historicalDocuments, 0);
+      document.getElementById("import-ocr-pages").textContent = formatNumber(importModel.historicalOcrPages, 0);
+      document.getElementById("historical-years").textContent = `${formatNumber(inputs.historical_import_years, 0)} years`;
+      document.getElementById("aws-import-cost").textContent = formatMoney(importModel.awsImport, "USD");
+      document.getElementById("scw-import-cost").textContent = formatMoney(importModel.scwImport, "EUR");
+      document.getElementById("aws-import-storage-line").textContent = formatMoney(importModel.awsBreakdown.storageLoad, "USD");
+      document.getElementById("aws-import-metadata-line").textContent = formatMoney(importModel.awsBreakdown.metadataBackfill, "USD");
+      document.getElementById("aws-import-index-line").textContent = formatMoney(importModel.awsBreakdown.indexBackfill, "USD");
+      document.getElementById("aws-import-ai-line").textContent = formatMoney(importModel.awsBreakdown.aiEnrichment, "USD");
+      document.getElementById("aws-import-compute-line").textContent = formatMoney(importModel.awsBreakdown.migrationCompute, "USD");
+      document.getElementById("scw-import-storage-line").textContent = formatMoney(importModel.scwBreakdown.storageLoad, "EUR");
+      document.getElementById("scw-import-metadata-line").textContent = formatMoney(importModel.scwBreakdown.metadataBackfill, "EUR");
+      document.getElementById("scw-import-index-line").textContent = formatMoney(importModel.scwBreakdown.indexBackfill, "EUR");
+      document.getElementById("scw-import-ai-line").textContent = formatMoney(importModel.scwBreakdown.aiEnrichment, "EUR");
+      document.getElementById("scw-import-compute-line").textContent = formatMoney(importModel.scwBreakdown.migrationCompute, "EUR");
+      document.getElementById("aws-lifecycle-detail").textContent =
+        `Policy: hot for ${formatNumber(inputs.years_before_cold_transition, 1)} years, retained for ${formatNumber(inputs.retention_years_total, 1)} years total. Tier: ${aws.lifecycle.coldTier}. Hot ${formatMoney(aws.lifecycle.hotStorageMonthly, "USD")}/mo, cold ${formatMoney(aws.lifecycle.coldStorageMonthly, "USD")}/mo, transitions ${formatMoney(aws.lifecycle.transitionMonthly, "USD")}/mo, restores ${formatMoney(aws.lifecycle.restoreMonthly, "USD")}/mo, assumed restore latency ${formatNumber(aws.lifecycle.restoreLatencyHours, 1)}h.`;
+      document.getElementById("scw-lifecycle-detail").textContent =
+        `Policy: hot for ${formatNumber(inputs.years_before_cold_transition, 1)} years, retained for ${formatNumber(inputs.retention_years_total, 1)} years total. Tier: ${scw.lifecycle.coldTier}. Hot ${formatMoney(scw.lifecycle.hotStorageMonthly, "EUR")}/mo, cold ${formatMoney(scw.lifecycle.coldStorageMonthly, "EUR")}/mo, transitions ${formatMoney(scw.lifecycle.transitionMonthly, "EUR")}/mo, restores ${formatMoney(scw.lifecycle.restoreMonthly, "EUR")}/mo, assumed restore latency ${formatNumber(scw.lifecycle.restoreLatencyHours, 1)}h.`;
+
+      renderBreakdown("aws-breakdown", aws.lines, "USD");
+      renderBreakdown("scw-breakdown", scw.lines, "EUR");
+      drawCostDriverChart("aws-chart", aws.lines, "#1b5e5a");
+      drawCostDriverChart("scw-chart", scw.lines, "#9c5d27");
+
+      const awsVsScw = aws.total > 0 && scw.total > 0
+        ? `Current estimate: AWS is ${formatMoney(aws.total, "USD")} per month (${formatMoney(aws.total * fxState.usdToEur, "EUR")} normalized) and Scaleway is ${formatMoney(scw.total, "EUR")} per month (${formatMoney(scw.total * fxState.eurToUsd, "USD")} normalized). The useful comparison is still the shape of the cost drivers, not only the top-line number.`
+        : "Fill in the inputs to compare provider-level totals.";
+
+      document.getElementById("comparison-note").textContent = awsVsScw;
+    }
+
+    function applyPreset(name) {
+      const preset = presets[name];
+      if (!preset) return;
+
+      Object.entries(preset).forEach(([key, value]) => {
+        const input = document.getElementById(key);
+        if (input) input.value = value;
+      });
+      activeScenario = name;
+      recalculate();
+    }
+
+    function resetDefaults() {
+      Object.entries(defaults).forEach(([key, value]) => {
+        const input = document.getElementById(key);
+        if (input) input.value = value;
+      });
+      activeScenario = "custom";
+      recalculate();
+    }
+
+    function downloadFile(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportJson() {
+      const inputs = getInputs();
+      const aws = calculateAws(inputs);
+      const scw = calculateScaleway(inputs);
+      const importModel = calculateImport(inputs);
+      const payload = {
+        exported_at: new Date().toISOString(),
+        scenario: activeScenario,
+        fx: {
+          usd_to_eur: Number(fxState.usdToEur.toFixed(6)),
+          eur_to_usd: Number(fxState.eurToUsd.toFixed(6)),
+          source: fxState.source,
+          date: fxState.date
+        },
+        historical_import: {
+          years: inputs.historical_import_years,
+          documents_per_year: inputs.historical_documents_per_year,
+          total_documents: importModel.historicalDocuments,
+          storage_gb: Number(importModel.historicalStorageGb.toFixed(2)),
+          ocr_pages: Number(importModel.historicalOcrPages.toFixed(0)),
+          yearly_storage_growth_gb: Number(importModel.yearlyStorageGrowthGb.toFixed(2)),
+          completed_migration_footprint_gb: Number(importModel.completedMigrationFootprintGb.toFixed(2)),
+          import_docs_per_day: Number(importModel.importDocsPerDay.toFixed(0)),
+          import_duration_days: Number(importModel.importDurationDays.toFixed(2)),
+          aws_one_time_cost_usd: Number(importModel.awsImport.toFixed(2)),
+          scaleway_one_time_cost_eur: Number(importModel.scwImport.toFixed(2)),
+          aws_breakdown: {
+            storage_load: Number(importModel.awsBreakdown.storageLoad.toFixed(2)),
+            metadata_backfill: Number(importModel.awsBreakdown.metadataBackfill.toFixed(2)),
+            index_backfill: Number(importModel.awsBreakdown.indexBackfill.toFixed(2)),
+            ai_enrichment: Number(importModel.awsBreakdown.aiEnrichment.toFixed(2)),
+            migration_compute: Number(importModel.awsBreakdown.migrationCompute.toFixed(2))
+          },
+          scaleway_breakdown: {
+            storage_load: Number(importModel.scwBreakdown.storageLoad.toFixed(2)),
+            metadata_backfill: Number(importModel.scwBreakdown.metadataBackfill.toFixed(2)),
+            index_backfill: Number(importModel.scwBreakdown.indexBackfill.toFixed(2)),
+            ai_enrichment: Number(importModel.scwBreakdown.aiEnrichment.toFixed(2)),
+            migration_compute: Number(importModel.scwBreakdown.migrationCompute.toFixed(2))
+          }
+        },
+        inputs,
+        providers: {
+          aws: {
+            currency: "USD",
+            monthly_total: Number(aws.total.toFixed(2)),
+            yearly_total: Number(aws.yearly.toFixed(2)),
+            monthly_total_eur_normalized: Number((aws.total * fxState.usdToEur).toFixed(2)),
+            lifecycle: {
+              years_before_cold_transition: Number(inputs.years_before_cold_transition.toFixed(2)),
+              retention_years_total: Number(inputs.retention_years_total.toFixed(2)),
+              cold_tier: inputs.aws_cold_tier,
+              hot_storage_monthly: Number(aws.lifecycle.hotStorageMonthly.toFixed(2)),
+              cold_storage_monthly: Number(aws.lifecycle.coldStorageMonthly.toFixed(2)),
+              transition_monthly: Number(aws.lifecycle.transitionMonthly.toFixed(2)),
+              restore_monthly: Number(aws.lifecycle.restoreMonthly.toFixed(2)),
+              restore_latency_hours: Number(aws.lifecycle.restoreLatencyHours.toFixed(2))
+            },
+            breakdown: aws.lines.map((line) => ({
+              name: line.name,
+              monthly: Number(line.monthly.toFixed(2)),
+              yearly: Number(line.yearly.toFixed(2)),
+              note: line.note
+            }))
+          },
+          scaleway: {
+            currency: "EUR",
+            monthly_total: Number(scw.total.toFixed(2)),
+            yearly_total: Number(scw.yearly.toFixed(2)),
+            monthly_total_usd_normalized: Number((scw.total * fxState.eurToUsd).toFixed(2)),
+            lifecycle: {
+              years_before_cold_transition: Number(inputs.years_before_cold_transition.toFixed(2)),
+              retention_years_total: Number(inputs.retention_years_total.toFixed(2)),
+              cold_tier: inputs.scw_cold_tier,
+              hot_storage_monthly: Number(scw.lifecycle.hotStorageMonthly.toFixed(2)),
+              cold_storage_monthly: Number(scw.lifecycle.coldStorageMonthly.toFixed(2)),
+              transition_monthly: Number(scw.lifecycle.transitionMonthly.toFixed(2)),
+              restore_monthly: Number(scw.lifecycle.restoreMonthly.toFixed(2)),
+              restore_latency_hours: Number(scw.lifecycle.restoreLatencyHours.toFixed(2))
+            },
+            breakdown: scw.lines.map((line) => ({
+              name: line.name,
+              monthly: Number(line.monthly.toFixed(2)),
+              yearly: Number(line.yearly.toFixed(2)),
+              note: line.note
+            }))
+          }
+        }
+      };
+
+      downloadFile("cloud-cost-calculator-export.json", JSON.stringify(payload, null, 2), "application/json");
+    }
+
+    function csvEscape(value) {
+      const stringValue = String(value ?? "");
+      if (/[",\n]/.test(stringValue)) {
+        return `"${stringValue.replace(/"/g, "\"\"")}"`;
+      }
+      return stringValue;
+    }
+
+    function exportCsv() {
+      const inputs = getInputs();
+      const aws = calculateAws(inputs);
+      const scw = calculateScaleway(inputs);
+      const importModel = calculateImport(inputs);
+
+      const rows = [
+        ["section", "provider", "name", "monthly", "yearly", "currency", "note"]
+      ];
+
+      rows.push(["summary", "aws", "total", aws.total.toFixed(2), aws.yearly.toFixed(2), "USD", `scenario=${activeScenario}; normalized_eur=${(aws.total * fxState.usdToEur).toFixed(2)}`]);
+      rows.push(["summary", "scaleway", "total", scw.total.toFixed(2), scw.yearly.toFixed(2), "EUR", `scenario=${activeScenario}; normalized_usd=${(scw.total * fxState.eurToUsd).toFixed(2)}`]);
+      rows.push(["lifecycle", "aws", "policy_years_before_cold", inputs.years_before_cold_transition.toFixed(2), "", "", `tier=${inputs.aws_cold_tier}`]);
+      rows.push(["lifecycle", "aws", "policy_retention_years_total", inputs.retention_years_total.toFixed(2), "", "", `tier=${inputs.aws_cold_tier}`]);
+      rows.push(["lifecycle", "aws", "hot_storage_monthly", aws.lifecycle.hotStorageMonthly.toFixed(2), "", "USD", `restore_latency_hours=${aws.lifecycle.restoreLatencyHours.toFixed(2)}; tier=${aws.lifecycle.coldTier}`]);
+      rows.push(["lifecycle", "aws", "cold_storage_monthly", aws.lifecycle.coldStorageMonthly.toFixed(2), "", "USD", "cold tier storage"]);
+      rows.push(["lifecycle", "aws", "transition_monthly", aws.lifecycle.transitionMonthly.toFixed(2), "", "USD", "lifecycle transitions"]);
+      rows.push(["lifecycle", "aws", "restore_monthly", aws.lifecycle.restoreMonthly.toFixed(2), "", "USD", "cold restore operations"]);
+      rows.push(["lifecycle", "scaleway", "policy_years_before_cold", inputs.years_before_cold_transition.toFixed(2), "", "", `tier=${inputs.scw_cold_tier}`]);
+      rows.push(["lifecycle", "scaleway", "policy_retention_years_total", inputs.retention_years_total.toFixed(2), "", "", `tier=${inputs.scw_cold_tier}`]);
+      rows.push(["lifecycle", "scaleway", "hot_storage_monthly", scw.lifecycle.hotStorageMonthly.toFixed(2), "", "EUR", `restore_latency_hours=${scw.lifecycle.restoreLatencyHours.toFixed(2)}; tier=${scw.lifecycle.coldTier}`]);
+      rows.push(["lifecycle", "scaleway", "cold_storage_monthly", scw.lifecycle.coldStorageMonthly.toFixed(2), "", "EUR", "cold tier storage"]);
+      rows.push(["lifecycle", "scaleway", "transition_monthly", scw.lifecycle.transitionMonthly.toFixed(2), "", "EUR", "lifecycle transitions"]);
+      rows.push(["lifecycle", "scaleway", "restore_monthly", scw.lifecycle.restoreMonthly.toFixed(2), "", "EUR", "cold restore operations"]);
+      rows.push(["import", "aws", "one_time_import", importModel.awsImport.toFixed(2), "", "USD", `documents=${importModel.historicalDocuments}; storage_gb=${importModel.historicalStorageGb.toFixed(2)}`]);
+      rows.push(["import", "scaleway", "one_time_import", importModel.scwImport.toFixed(2), "", "EUR", `documents=${importModel.historicalDocuments}; storage_gb=${importModel.historicalStorageGb.toFixed(2)}`]);
+      rows.push(["import_metric", "", "yearly_storage_growth_gb", importModel.yearlyStorageGrowthGb.toFixed(2), "", "", "steady-state yearly storage growth"]);
+      rows.push(["import_metric", "", "completed_migration_footprint_gb", importModel.completedMigrationFootprintGb.toFixed(2), "", "", "historical plus current footprint"]);
+      rows.push(["import_metric", "", "import_docs_per_day", importModel.importDocsPerDay.toFixed(0), "", "", "configured migration throughput"]);
+      rows.push(["import_metric", "", "import_duration_days", importModel.importDurationDays.toFixed(2), "", "", "estimated duration"]);
+      rows.push(["import_breakdown", "aws", "storage_load", importModel.awsBreakdown.storageLoad.toFixed(2), "", "USD", "historical storage load"]);
+      rows.push(["import_breakdown", "aws", "metadata_backfill", importModel.awsBreakdown.metadataBackfill.toFixed(2), "", "USD", "metadata write backfill"]);
+      rows.push(["import_breakdown", "aws", "index_backfill", importModel.awsBreakdown.indexBackfill.toFixed(2), "", "USD", "search index backfill"]);
+      rows.push(["import_breakdown", "aws", "ai_enrichment", importModel.awsBreakdown.aiEnrichment.toFixed(2), "", "USD", "historical OCR or AI enrichment"]);
+      rows.push(["import_breakdown", "aws", "migration_compute", importModel.awsBreakdown.migrationCompute.toFixed(2), "", "USD", "batch API, lambda and orchestration compute"]);
+      rows.push(["import_breakdown", "scaleway", "storage_load", importModel.scwBreakdown.storageLoad.toFixed(2), "", "EUR", "historical storage load"]);
+      rows.push(["import_breakdown", "scaleway", "metadata_backfill", importModel.scwBreakdown.metadataBackfill.toFixed(2), "", "EUR", "metadata backfill placeholder"]);
+      rows.push(["import_breakdown", "scaleway", "index_backfill", importModel.scwBreakdown.indexBackfill.toFixed(2), "", "EUR", "search index backfill placeholder"]);
+      rows.push(["import_breakdown", "scaleway", "ai_enrichment", importModel.scwBreakdown.aiEnrichment.toFixed(2), "", "EUR", "historical OCR or AI enrichment"]);
+      rows.push(["import_breakdown", "scaleway", "migration_compute", importModel.scwBreakdown.migrationCompute.toFixed(2), "", "EUR", "batch queue, function and container compute"]);
+      rows.push(["fx", "", "usd_to_eur", fxState.usdToEur.toFixed(6), "", "", `${fxState.source}; date=${fxState.date}`]);
+      rows.push(["fx", "", "eur_to_usd", fxState.eurToUsd.toFixed(6), "", "", `${fxState.source}; date=${fxState.date}`]);
+
+      Object.entries(inputs).forEach(([key, value]) => {
+        rows.push(["input", "", key, value, "", "", ""]);
+      });
+
+      aws.lines.forEach((line) => {
+        rows.push(["breakdown", "aws", line.name, line.monthly.toFixed(2), line.yearly.toFixed(2), "USD", line.note]);
+      });
+
+      scw.lines.forEach((line) => {
+        rows.push(["breakdown", "scaleway", line.name, line.monthly.toFixed(2), line.yearly.toFixed(2), "EUR", line.note]);
+      });
+
+      const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+      downloadFile("cloud-cost-calculator-export.csv", csv, "text/csv;charset=utf-8");
+    }
+
+    renderFields();
+    recalculate();
+    loadExchangeRate();
+
+    ["input-grid", "import-input-grid"].forEach((id) => {
+      const container = document.getElementById(id);
+      container.addEventListener("input", () => {
+        activeScenario = "custom";
+        recalculate();
+      });
+      container.addEventListener("change", () => {
+        activeScenario = "custom";
+        recalculate();
+      });
+    });
+
+    document.querySelectorAll("[data-preset]").forEach((button) => {
+      button.addEventListener("click", () => applyPreset(button.dataset.preset));
+    });
+
+    document.getElementById("auto-scale-model").addEventListener("change", () => {
+      activeScenario = "custom";
+      recalculate();
+    });
+
+    document.getElementById("calculate-now").addEventListener("click", () => {
+      recalculate();
+    });
+
+    document.getElementById("reset-defaults").addEventListener("click", resetDefaults);
+    document.getElementById("export-json").addEventListener("click", exportJson);
+    document.getElementById("export-csv").addEventListener("click", exportCsv);
+
+  </script>
+</body>
+</html>
