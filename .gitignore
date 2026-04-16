@@ -5,4 +5,7 @@ build/
 out/
 deploy/aws/*.env
 infra/live/**/*.tfvars
+infra/live/**/.terraform/
+infra/live/**/terraform.tfstate
+infra/live/**/terraform.tfstate.*
 tools/
