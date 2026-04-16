@@ -4,12 +4,13 @@ import archive.application.intake.projection.DocumentIngestProjector
 import archive.domain.intake.command.RegisterDocumentIntake
 import archive.domain.intake.decision.DocumentIntakeDecider
 import archive.domain.intake.decision.DocumentIntakeDecisionModel
+import archive.application.intake.result.DocumentIngestResult
+import archive.application.intake.result.toResult
 import archive.domain.intake.model.DocumentId
 import archive.domain.intake.validation.DocumentIntakeValidation
 import archive.ports.checksum.ChecksumService
 import archive.ports.eventstore.AppendCondition
 import archive.ports.eventstore.EventStore
-import archive.ports.readmodel.DocumentIngestView
 import archive.ports.readmodel.DocumentIngestViewRepository
 
 class RegisterDocumentIntakeHandler(
@@ -18,7 +19,7 @@ class RegisterDocumentIntakeHandler(
     private val repository: DocumentIngestViewRepository,
     private val projector: DocumentIngestProjector = DocumentIngestProjector(),
 ) {
-    fun handle(request: RegisterDocumentIntakeRequest): DocumentIngestView {
+    fun handle(request: RegisterDocumentIntakeRequest): DocumentIngestResult {
         val command = RegisterDocumentIntake(
             fileName = request.fileName,
             contentType = request.contentType,
@@ -50,6 +51,6 @@ class RegisterDocumentIntakeHandler(
         val view = projector.project(newEvents)
             ?: error("could not rebuild intake view from newly appended events")
         repository.save(view)
-        return view
+        return view.toResult()
     }
 }

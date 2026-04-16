@@ -39,7 +39,8 @@ class RegisterDocumentIntakeHandlerTest {
             ),
             eventStore.appendConditions.single(),
         )
-        assertEquals(view, repository.saved.single())
+        assertEquals(view.documentId, repository.saved.single().documentId)
+        assertEquals(view.checksum, repository.saved.single().checksum)
     }
 }
 
