@@ -10,7 +10,7 @@ import archive.adapters.postgres.PostgresDocumentIngestViewRepository
 import archive.adapters.postgres.PostgresEventStore
 import archive.adapters.postgres.PostgresSchemaInitializer
 import archive.application.intake.command.RegisterDocumentIntakeHandler
-import archive.application.intake.service.DocumentIntakeService
+import archive.application.intake.query.GetDocumentIngestQueryHandler
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -68,7 +68,7 @@ fun Application.archiveModule() {
         eventStore = persistence.eventStore,
         repository = persistence.repository,
     )
-    val service = DocumentIntakeService(
+    val getDocumentIngestQueryHandler = GetDocumentIngestQueryHandler(
         eventStore = persistence.eventStore,
         repository = persistence.repository,
     )
@@ -99,7 +99,7 @@ fun Application.archiveModule() {
 
         get("/api/v1/documents/{id}/ingest") {
             val documentId = requireNotNull(call.parameters["id"]) { "document id is required" }
-            val view = service.get(documentId)
+            val view = getDocumentIngestQueryHandler.handle(documentId)
             if (view == null) {
                 call.respond(HttpStatusCode.NotFound)
             } else {

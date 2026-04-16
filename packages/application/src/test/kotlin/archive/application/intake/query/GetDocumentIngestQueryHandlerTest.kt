@@ -1,4 +1,4 @@
-package archive.application.intake.service
+package archive.application.intake.query
 
 import archive.domain.intake.event.DocumentChecksumRecorded
 import archive.domain.intake.event.DocumentIngestStatusUpdated
@@ -15,9 +15,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-class DocumentIntakeServiceTest {
+class GetDocumentIngestQueryHandlerTest {
     @Test
-    fun `get rebuilds ingest view from event history when read model is missing`() {
+    fun `handle rebuilds ingest view from event history when read model is missing`() {
         val checksum = Checksum("SHA-256", "rebuilt")
         val documentId = "doc-rebuild"
         val eventStore = RecordingEventStore(
@@ -45,12 +45,12 @@ class DocumentIntakeServiceTest {
             )
         )
         val repository = RecordingRepository()
-        val service = DocumentIntakeService(
+        val handler = GetDocumentIngestQueryHandler(
             eventStore = eventStore,
             repository = repository,
         )
 
-        val rebuilt = service.get(documentId)
+        val rebuilt = handler.handle(documentId)
 
         assertNotNull(rebuilt)
         assertEquals(documentId, rebuilt.documentId)
