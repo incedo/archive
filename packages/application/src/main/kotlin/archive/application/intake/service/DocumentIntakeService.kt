@@ -2,6 +2,7 @@ package archive.application.intake.service
 
 import archive.domain.intake.command.RegisterDocumentIntake
 import archive.domain.intake.decision.DocumentIntakeDecisionModel
+import archive.application.intake.projection.DocumentIngestProjector
 import archive.domain.intake.event.DocumentChecksumRecorded
 import archive.domain.intake.event.DocumentIngestStatusUpdated
 import archive.domain.intake.event.DocumentIntakeRequested
@@ -18,6 +19,7 @@ class DocumentIntakeService(
     private val checksumService: ChecksumService,
     private val eventStore: EventStore,
     private val repository: DocumentIngestViewRepository,
+    private val projector: DocumentIngestProjector = DocumentIngestProjector(),
 ) {
     fun register(command: RegisterDocumentIntake): DocumentIngestView {
         DocumentIntakeValidation.validate(command)
@@ -47,9 +49,8 @@ class DocumentIntakeService(
             ),
         )
 
-        val view = toView(
-            DocumentIntakeDecisionModel.rehydrate(newEvents)
-        ) ?: error("could not rebuild intake view from newly appended events")
+        val view = projector.project(newEvents)
+            ?: error("could not rebuild intake view from newly appended events")
         repository.save(view)
         return view
     }
@@ -57,33 +58,12 @@ class DocumentIntakeService(
     fun get(documentId: String): DocumentIngestView? {
         repository.findById(documentId)?.let { return it }
 
-        val rebuilt = DocumentIntakeDecisionModel
-            .rehydrate(eventStore.loadByTag("document:$documentId"))
-            .let(::toView)
+        val rebuilt = projector.project(eventStore.loadByTag("document:$documentId"))
 
         if (rebuilt != null) {
             repository.save(rebuilt)
         }
 
         return rebuilt
-    }
-
-    private fun toView(decision: DocumentIntakeDecisionModel): DocumentIngestView? {
-        val resolvedDocumentId = decision.documentId ?: return null
-        val resolvedStatus = decision.status ?: return null
-        val resolvedChecksum = decision.checksum ?: return null
-        val resolvedFileName = decision.fileName ?: return null
-        val resolvedContentType = decision.contentType ?: return null
-        val resolvedMetadata = decision.metadata ?: return null
-
-        return DocumentIngestView(
-            documentId = resolvedDocumentId,
-            status = resolvedStatus,
-            checksum = resolvedChecksum,
-            fileName = resolvedFileName,
-            contentType = resolvedContentType,
-            documentTypeHint = decision.documentTypeHint,
-            metadata = resolvedMetadata,
-        )
     }
 }
