@@ -9,6 +9,7 @@ import archive.domain.intake.model.DocumentId
 import archive.domain.intake.model.IngestStatus
 import archive.domain.intake.validation.DocumentIntakeValidation
 import archive.ports.checksum.ChecksumService
+import archive.ports.eventstore.AppendCondition
 import archive.ports.eventstore.EventStore
 import archive.ports.readmodel.DocumentIngestView
 import archive.ports.readmodel.DocumentIngestViewRepository
@@ -38,7 +39,13 @@ class DocumentIntakeService(
             DocumentChecksumRecorded.create(documentId, checksum),
             DocumentIngestStatusUpdated.create(documentId, status),
         )
-        eventStore.append(newEvents)
+        eventStore.append(
+            events = newEvents,
+            condition = AppendCondition.TagEventCount(
+                tag = tag,
+                expectedCount = 0,
+            ),
+        )
 
         val view = toView(
             DocumentIntakeDecisionModel.rehydrate(newEvents)

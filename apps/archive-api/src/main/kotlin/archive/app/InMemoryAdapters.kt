@@ -2,8 +2,10 @@ package archive.app
 
 import archive.domain.intake.event.DomainEvent
 import archive.domain.intake.model.Checksum
+import archive.ports.eventstore.AppendCondition
 import archive.ports.checksum.ChecksumService
 import archive.ports.eventstore.EventStore
+import archive.ports.eventstore.EventStoreConcurrencyException
 import archive.ports.readmodel.DocumentIngestView
 import archive.ports.readmodel.DocumentIngestViewRepository
 import java.security.MessageDigest
@@ -21,7 +23,18 @@ class Sha256ChecksumService : ChecksumService {
 class InMemoryEventStore : EventStore {
     private val events = mutableListOf<DomainEvent>()
 
-    override fun append(events: List<DomainEvent>) {
+    override fun append(events: List<DomainEvent>, condition: AppendCondition) {
+        when (condition) {
+            AppendCondition.Any -> Unit
+            is AppendCondition.TagEventCount -> {
+                val actualCount = this.events.count { event -> condition.tag in event.tags }.toLong()
+                if (actualCount != condition.expectedCount) {
+                    throw EventStoreConcurrencyException(
+                        "append condition failed for tag ${condition.tag}: expected ${condition.expectedCount} events but found $actualCount"
+                    )
+                }
+            }
+        }
         this.events.addAll(events)
     }
 

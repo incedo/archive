@@ -8,9 +8,12 @@ import archive.domain.intake.model.Checksum
 import archive.domain.intake.model.DocumentId
 import archive.domain.intake.model.DocumentMetadata
 import archive.domain.intake.model.IngestStatus
+import archive.ports.eventstore.AppendCondition
+import archive.ports.eventstore.EventStoreConcurrencyException
 import archive.ports.readmodel.DocumentIngestView
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class PostgresPersistenceAdaptersTest {
@@ -45,7 +48,11 @@ class PostgresPersistenceAdaptersTest {
                     checksum = Checksum("SHA-256", "abc123"),
                 ),
                 DocumentIngestStatusUpdated.create(documentId, IngestStatus.REGISTERED),
-            )
+            ),
+            condition = AppendCondition.TagEventCount(
+                tag = "document:${documentId.value}",
+                expectedCount = 0,
+            ),
         )
 
         val loadedEvents = eventStore.loadByTag("document:${documentId.value}")
@@ -97,6 +104,40 @@ class PostgresPersistenceAdaptersTest {
         val stored = repository.findById("doc-123")
         assertNotNull(stored)
         assertEquals(view, stored)
+    }
+
+    @Test
+    fun `event store rejects append when expected tag count does not match`() {
+        val connectionFactory = connectionFactory("concurrency")
+        PostgresSchemaInitializer(connectionFactory).initialize()
+        val eventStore = PostgresEventStore(connectionFactory)
+        val documentId = DocumentId.generate()
+        val tag = "document:${documentId.value}"
+
+        eventStore.append(
+            events = listOf(
+                DocumentIntakeRequested.create(
+                    documentId = documentId,
+                    fileName = "contract.pdf",
+                    contentType = "application/pdf",
+                    documentTypeHint = null,
+                    metadata = DocumentMetadata("scanner", "CTR-100"),
+                )
+            ),
+            condition = AppendCondition.TagEventCount(tag = tag, expectedCount = 0),
+        )
+
+        assertFailsWith<EventStoreConcurrencyException> {
+            eventStore.append(
+                events = listOf(
+                    DocumentChecksumRecorded.create(
+                        documentId = documentId,
+                        checksum = Checksum("SHA-256", "abc123"),
+                    )
+                ),
+                condition = AppendCondition.TagEventCount(tag = tag, expectedCount = 0),
+            )
+        }
     }
 }
 

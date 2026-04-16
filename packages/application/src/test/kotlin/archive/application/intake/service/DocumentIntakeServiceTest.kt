@@ -9,6 +9,7 @@ import archive.domain.intake.model.Checksum
 import archive.domain.intake.model.DocumentMetadata
 import archive.domain.intake.model.IngestStatus
 import archive.ports.checksum.ChecksumService
+import archive.ports.eventstore.AppendCondition
 import archive.ports.eventstore.EventStore
 import archive.ports.readmodel.DocumentIngestView
 import archive.ports.readmodel.DocumentIngestViewRepository
@@ -33,6 +34,13 @@ class DocumentIntakeServiceTest {
         assertEquals(1, eventStore.loadedTags.size)
         assertTrue(eventStore.loadedTags.single().startsWith("document:"))
         assertEquals(eventStore.loadedTags.single(), eventStore.appendedEvents.first().tags.single())
+        assertEquals(
+            AppendCondition.TagEventCount(
+                tag = eventStore.loadedTags.single(),
+                expectedCount = 0,
+            ),
+            eventStore.appendConditions.single(),
+        )
         assertEquals(view, repository.saved.single())
     }
 
@@ -101,8 +109,10 @@ private class RecordingEventStore(
 ) : EventStore {
     val loadedTags = mutableListOf<String>()
     val appendedEvents = mutableListOf<DomainEvent>()
+    val appendConditions = mutableListOf<AppendCondition>()
 
-    override fun append(events: List<DomainEvent>) {
+    override fun append(events: List<DomainEvent>, condition: AppendCondition) {
+        appendConditions += condition
         appendedEvents += events
         events.forEach { event ->
             event.tags.forEach { tag ->

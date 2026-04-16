@@ -1,19 +1,22 @@
 package archive.adapters.postgres
 
 import archive.domain.intake.event.DomainEvent
+import archive.ports.eventstore.AppendCondition
 import archive.ports.eventstore.EventStore
+import archive.ports.eventstore.EventStoreConcurrencyException
 import java.sql.Statement
 
 class PostgresEventStore(
     private val connectionFactory: JdbcConnectionFactory,
     private val codec: DomainEventJsonCodec = DomainEventJsonCodec(),
 ) : EventStore {
-    override fun append(events: List<DomainEvent>) {
+    override fun append(events: List<DomainEvent>, condition: AppendCondition) {
         if (events.isEmpty()) return
 
         connectionFactory.open().use { connection ->
             connection.autoCommit = false
             try {
+                assertAppendCondition(connection, condition)
                 events.forEach { event ->
                     val eventId = connection.prepareStatement(
                         """
@@ -52,6 +55,32 @@ class PostgresEventStore(
                 throw ex
             } finally {
                 connection.autoCommit = true
+            }
+        }
+    }
+
+    private fun assertAppendCondition(connection: java.sql.Connection, condition: AppendCondition) {
+        when (condition) {
+            AppendCondition.Any -> Unit
+            is AppendCondition.TagEventCount -> {
+                val actualCount = connection.prepareStatement(
+                    """
+                    select count(*)
+                    from archive_event_tags
+                    where tag = ?
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setString(1, condition.tag)
+                    statement.executeQuery().use { rs ->
+                        check(rs.next()) { "count query did not return a row" }
+                        rs.getLong(1)
+                    }
+                }
+                if (actualCount != condition.expectedCount) {
+                    throw EventStoreConcurrencyException(
+                        "append condition failed for tag ${condition.tag}: expected ${condition.expectedCount} events but found $actualCount"
+                    )
+                }
             }
         }
     }
