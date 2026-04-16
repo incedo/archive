@@ -38,9 +38,13 @@ class PostgresSchemaInitializer(
                         content_type varchar(255) not null,
                         document_type_hint varchar(255),
                         source_system varchar(255) not null,
-                        business_key varchar(255) not null
+                        business_key varchar(255) not null,
+                        last_updated_at timestamp with time zone not null default current_timestamp
                     )
                     """.trimIndent()
+                )
+                statement.execute(
+                    "alter table document_ingest_views add column if not exists last_updated_at timestamp with time zone not null default current_timestamp"
                 )
                 statement.execute(
                     """

@@ -107,6 +107,41 @@ class PostgresPersistenceAdaptersTest {
     }
 
     @Test
+    fun `read model repository finds recent ingestions`() {
+        val connectionFactory = connectionFactory("recent")
+        PostgresSchemaInitializer(connectionFactory).initialize()
+        val repository = PostgresDocumentIngestViewRepository(connectionFactory)
+
+        val view1 = DocumentIngestView(
+            documentId = "doc-1",
+            status = IngestStatus.REGISTERED,
+            checksum = Checksum("SHA-256", "abc"),
+            fileName = "1.pdf",
+            contentType = "application/pdf",
+            documentTypeHint = "invoice",
+            metadata = DocumentMetadata("s1", "bk1"),
+        )
+        val view2 = DocumentIngestView(
+            documentId = "doc-2",
+            status = IngestStatus.REGISTERED,
+            checksum = Checksum("SHA-256", "def"),
+            fileName = "2.pdf",
+            contentType = "application/pdf",
+            documentTypeHint = "invoice",
+            metadata = DocumentMetadata("s1", "bk2"),
+        )
+
+        repository.save(view1)
+        Thread.sleep(10) // ensure different timestamps if needed, though most DBs will differ
+        repository.save(view2)
+
+        val recent = repository.findRecent(10)
+        assertEquals(2, recent.size)
+        assertEquals("doc-2", recent[0].documentId)
+        assertEquals("doc-1", recent[1].documentId)
+    }
+
+    @Test
     fun `event store rejects append when expected tag count does not match`() {
         val connectionFactory = connectionFactory("concurrency")
         PostgresSchemaInitializer(connectionFactory).initialize()

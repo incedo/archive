@@ -9,8 +9,12 @@ import archive.adapters.postgres.JdbcConnectionFactory
 import archive.adapters.postgres.PostgresDocumentIngestViewRepository
 import archive.adapters.postgres.PostgresEventStore
 import archive.adapters.postgres.PostgresSchemaInitializer
+import archive.app.config.AppConfig
 import archive.application.intake.command.RegisterDocumentIntakeHandler
 import archive.application.intake.query.GetDocumentIngestQueryHandler
+import archive.application.intake.query.ListRecentIngestionsQuery
+import archive.application.intake.query.ListRecentIngestionsQueryHandler
+import archive.application.intake.result.toResult
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -27,7 +31,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun main() {
-    embeddedServer(Netty, port = 8080, module = Application::archiveModule).start(wait = true)
+    val config = AppConfig()
+    embeddedServer(Netty, port = config.port) {
+        archiveModule(config)
+    }.start(wait = true)
 }
 
 private data class PersistenceAdapters(
@@ -35,13 +42,8 @@ private data class PersistenceAdapters(
     val repository: archive.ports.readmodel.DocumentIngestViewRepository,
 )
 
-private fun readSetting(name: String): String? =
-    System.getenv(name)?.takeIf { it.isNotBlank() }
-        ?: System.getProperty(name)?.takeIf { it.isNotBlank() }
-
-private fun createPersistenceAdapters(): PersistenceAdapters {
-    val jdbcUrl = readSetting("ARCHIVE_JDBC_URL")
-    if (jdbcUrl == null) {
+private fun createPersistenceAdapters(config: AppConfig): PersistenceAdapters {
+    if (config.jdbcUrl == null) {
         return PersistenceAdapters(
             eventStore = InMemoryEventStore(),
             repository = InMemoryDocumentIngestViewRepository(),
@@ -49,9 +51,9 @@ private fun createPersistenceAdapters(): PersistenceAdapters {
     }
 
     val connectionFactory = JdbcConnectionFactory(
-        jdbcUrl = jdbcUrl,
-        username = readSetting("ARCHIVE_JDBC_USER"),
-        password = readSetting("ARCHIVE_JDBC_PASSWORD"),
+        jdbcUrl = config.jdbcUrl,
+        username = config.jdbcUser,
+        password = config.jdbcPassword,
     )
     PostgresSchemaInitializer(connectionFactory).initialize()
 
@@ -61,8 +63,8 @@ private fun createPersistenceAdapters(): PersistenceAdapters {
     )
 }
 
-fun Application.archiveModule() {
-    val persistence = createPersistenceAdapters()
+fun Application.archiveModule(config: AppConfig = AppConfig()) {
+    val persistence = createPersistenceAdapters(config)
     val registerDocumentIntakeHandler = RegisterDocumentIntakeHandler(
         checksumService = Sha256ChecksumService(),
         eventStore = persistence.eventStore,
@@ -70,6 +72,9 @@ fun Application.archiveModule() {
     )
     val getDocumentIngestQueryHandler = GetDocumentIngestQueryHandler(
         eventStore = persistence.eventStore,
+        repository = persistence.repository,
+    )
+    val listRecentIngestionsQueryHandler = ListRecentIngestionsQueryHandler(
         repository = persistence.repository,
     )
 
@@ -84,6 +89,16 @@ fun Application.archiveModule() {
     }
 
     routing {
+        get("/api/v1/admin/health") {
+            call.respond(mapOf("status" to "UP"))
+        }
+
+        get("/api/v1/admin/ingestions") {
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+            val views = listRecentIngestionsQueryHandler.handle(ListRecentIngestionsQuery(limit))
+            call.respond(views.map { GenericIntakeMapper.toResponse(it.toResult()) })
+        }
+
         post("/api/v1/documents/intake") {
             val request = parseGenericMultipartIntake(call)
             val view = registerDocumentIntakeHandler.handle(GenericIntakeMapper.toCommand(request))

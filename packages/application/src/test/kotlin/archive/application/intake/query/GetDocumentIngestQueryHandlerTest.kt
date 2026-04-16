@@ -79,4 +79,7 @@ private class RecordingRepository : DocumentIngestViewRepository {
     }
 
     override fun findById(documentId: String): DocumentIngestView? = views[documentId]
+
+    override fun findRecent(limit: Int): List<DocumentIngestView> =
+        views.values.toList().reversed().take(limit)
 }

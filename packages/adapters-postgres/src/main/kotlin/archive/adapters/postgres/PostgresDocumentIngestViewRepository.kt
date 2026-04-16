@@ -23,7 +23,8 @@ class PostgresDocumentIngestViewRepository(
                         content_type = ?,
                         document_type_hint = ?,
                         source_system = ?,
-                        business_key = ?
+                        business_key = ?,
+                        last_updated_at = current_timestamp
                     where document_id = ?
                     """.trimIndent()
                 ).use { statement ->
@@ -51,8 +52,9 @@ class PostgresDocumentIngestViewRepository(
                             content_type,
                             document_type_hint,
                             source_system,
-                            business_key
-                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            business_key,
+                            last_updated_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp)
                         """.trimIndent()
                     ).use { statement ->
                         statement.setString(1, view.documentId)
@@ -114,6 +116,51 @@ class PostgresDocumentIngestViewRepository(
                             businessKey = rs.getString("business_key"),
                         ),
                     )
+                }
+            }
+        }
+
+    override fun findRecent(limit: Int): List<DocumentIngestView> =
+        connectionFactory.open().use { connection ->
+            connection.prepareStatement(
+                """
+                select document_id,
+                       status,
+                       checksum_algorithm,
+                       checksum_value,
+                       file_name,
+                       content_type,
+                       document_type_hint,
+                       source_system,
+                       business_key
+                from document_ingest_views
+                order by last_updated_at desc
+                limit ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setInt(1, limit)
+                statement.executeQuery().use { rs ->
+                    val result = mutableListOf<DocumentIngestView>()
+                    while (rs.next()) {
+                        result.add(
+                            DocumentIngestView(
+                                documentId = rs.getString("document_id"),
+                                status = IngestStatus.valueOf(rs.getString("status")),
+                                checksum = Checksum(
+                                    algorithm = rs.getString("checksum_algorithm"),
+                                    value = rs.getString("checksum_value"),
+                                ),
+                                fileName = rs.getString("file_name"),
+                                contentType = rs.getString("content_type"),
+                                documentTypeHint = rs.getString("document_type_hint"),
+                                metadata = DocumentMetadata(
+                                    sourceSystem = rs.getString("source_system"),
+                                    businessKey = rs.getString("business_key"),
+                                ),
+                            )
+                        )
+                    }
+                    result
                 }
             }
         }

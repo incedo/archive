@@ -50,4 +50,7 @@ class InMemoryDocumentIngestViewRepository : DocumentIngestViewRepository {
     }
 
     override fun findById(documentId: String): DocumentIngestView? = store[documentId]
+
+    override fun findRecent(limit: Int): List<DocumentIngestView> =
+        store.values.toList().reversed().take(limit)
 }
