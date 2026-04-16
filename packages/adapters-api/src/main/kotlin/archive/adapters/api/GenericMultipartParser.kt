@@ -3,9 +3,9 @@ package archive.adapters.api
 import archive.domain.intake.model.DocumentMetadata
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
-import io.ktor.server.request.ApplicationReceiveRequest
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.application.ApplicationCall
+import io.ktor.utils.io.toByteArray
 
 private data class ParsedMultipartFields(
     var fileName: String? = null,
@@ -25,7 +25,7 @@ private suspend fun parseMultipart(call: ApplicationCall): ParsedMultipartFields
             is PartData.FileItem -> {
                 fields.fileName = part.originalFileName ?: "upload.bin"
                 fields.contentType = part.contentType?.toString() ?: "application/octet-stream"
-                fields.content = part.streamProvider().readBytes().toString(Charsets.UTF_8)
+                fields.content = part.provider().toByteArray().toString(Charsets.UTF_8)
             }
             is PartData.FormItem -> {
                 when (part.name) {

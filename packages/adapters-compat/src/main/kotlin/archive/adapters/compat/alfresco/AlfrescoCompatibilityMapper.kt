@@ -1,6 +1,5 @@
 package archive.adapters.compat.alfresco
 
-import archive.adapters.api.GenericDocumentIntakeRequest
 import archive.adapters.api.GenericMultipartIntakePayload
 import archive.domain.intake.model.DocumentMetadata
 import archive.ports.readmodel.DocumentIngestView

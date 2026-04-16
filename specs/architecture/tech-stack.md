@@ -66,9 +66,20 @@ Provider mapping:
 
 ## 3. Language and Core Frameworks
 
+### Version Policy
+
+For this repo, the default policy is:
+
+- use the latest stable Gradle release that is broadly supported by the chosen Kotlin release
+- use the latest stable Kotlin release for JVM and Kotlin Multiplatform work
+- avoid EAP, RC, beta, or preview releases as the default baseline
+- prefer repo-pinned wrapper and plugin versions over developer-local tool versions
+
+This policy exists to reduce drift, avoid stale toolchains, and keep future multiplatform work from being blocked by outdated build infrastructure.
+
 ### Kotlin
 
-**Version**: Kotlin 2.1+ stable
+**Version**: latest stable Kotlin release
 
 Kotlin is the primary language across backend, shared logic, and frontend.
 
@@ -109,6 +120,8 @@ Use:
 - coroutines
 
 The frontend should remain a consumer of software contracts, not a place where archive policy logic is reimplemented.
+
+When multiplatform modules are introduced, they should use the same latest-stable Kotlin baseline as the rest of the repo.
 
 ---
 

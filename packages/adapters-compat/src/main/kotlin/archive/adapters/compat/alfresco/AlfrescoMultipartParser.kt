@@ -4,6 +4,7 @@ import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveMultipart
+import io.ktor.utils.io.toByteArray
 
 private data class ParsedAlfrescoFields(
     var name: String? = null,
@@ -23,7 +24,7 @@ private suspend fun parseMultipart(call: ApplicationCall): ParsedAlfrescoFields 
             is PartData.FileItem -> {
                 fields.name = part.originalFileName ?: "upload.bin"
                 fields.contentType = part.contentType?.toString() ?: "application/octet-stream"
-                fields.content = part.streamProvider().readBytes().toString(Charsets.UTF_8)
+                fields.content = part.provider().toByteArray().toString(Charsets.UTF_8)
             }
             is PartData.FormItem -> {
                 when (part.name) {
