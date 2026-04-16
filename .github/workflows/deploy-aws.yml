@@ -163,6 +163,18 @@ jobs:
           container-name: ${{ steps.config.outputs.container_name }}
           image: ${{ inputs.image_uri }}
 
+      - name: Read current ECS desired count
+        id: service
+        shell: bash
+        run: |
+          set -euo pipefail
+          desired_count="$(aws ecs describe-services \
+            --cluster "${{ steps.config.outputs.ecs_cluster }}" \
+            --services "${{ steps.config.outputs.ecs_service }}" \
+            --query 'services[0].desiredCount' \
+            --output text)"
+          echo "desired_count=$desired_count" >> "$GITHUB_OUTPUT"
+
       - name: Deploy task definition
         id: deploy
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -170,7 +182,20 @@ jobs:
           task-definition: ${{ steps.render.outputs.task-definition }}
           service: ${{ steps.config.outputs.ecs_service }}
           cluster: ${{ steps.config.outputs.ecs_cluster }}
-          wait-for-service-stability: true
+          wait-for-service-stability: false
+
+      - name: Wait for ECS service stability
+        if: ${{ steps.service.outputs.desired_count != '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable \
+            --cluster "${{ steps.config.outputs.ecs_cluster }}" \
+            --services "${{ steps.config.outputs.ecs_service }}"
+
+      - name: Skip stability wait for zero-scale bootstrap service
+        if: ${{ steps.service.outputs.desired_count == '0' }}
+        run: echo "Skipping ECS stability wait because desired count is 0."
 
       - name: Publish deployment summary
         run: |
@@ -184,5 +209,6 @@ jobs:
             echo "- ECS service: \`${{ steps.config.outputs.ecs_service }}\`"
             echo "- Task family: \`${{ steps.config.outputs.ecs_task_family }}\`"
             echo "- Container: \`${{ steps.config.outputs.container_name }}\`"
+            echo "- Desired count at deploy time: \`${{ steps.service.outputs.desired_count }}\`"
             echo "- Image: \`${{ inputs.image_uri }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
