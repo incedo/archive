@@ -10,9 +10,9 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 class Sha256ChecksumService : ChecksumService {
-    override fun calculate(content: String): Checksum {
+    override fun calculate(content: ByteArray): Checksum {
         val digest = MessageDigest.getInstance("SHA-256")
-        val bytes = digest.digest(content.toByteArray())
+        val bytes = digest.digest(content)
         val value = bytes.joinToString("") { "%02x".format(it) }
         return Checksum(algorithm = "SHA-256", value = value)
     }

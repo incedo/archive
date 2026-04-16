@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class GenericMultipartIntakePayload(
     val fileName: String,
     val contentType: String,
-    val content: String,
+    val content: ByteArray,
     val documentTypeHint: String?,
     val metadata: DocumentMetadata,
 )
@@ -21,4 +21,9 @@ data class GenericDocumentIntakeResponse(
     val contentType: String,
     val documentTypeHint: String? = null,
     val metadata: DocumentMetadata,
+)
+
+@Serializable
+data class ErrorResponse(
+    val message: String,
 )

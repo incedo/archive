@@ -6,5 +6,6 @@ include(
     ":packages:ports",
     ":packages:adapters-api",
     ":packages:adapters-compat",
+    ":packages:adapters-postgres",
     ":apps:archive-api",
 )

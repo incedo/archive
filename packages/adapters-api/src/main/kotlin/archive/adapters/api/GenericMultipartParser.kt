@@ -10,7 +10,7 @@ import io.ktor.utils.io.toByteArray
 private data class ParsedMultipartFields(
     var fileName: String? = null,
     var contentType: String? = null,
-    var content: String? = null,
+    var content: ByteArray? = null,
     var documentTypeHint: String? = null,
     var sourceSystem: String? = null,
     var businessKey: String? = null,
@@ -25,7 +25,7 @@ private suspend fun parseMultipart(call: ApplicationCall): ParsedMultipartFields
             is PartData.FileItem -> {
                 fields.fileName = part.originalFileName ?: "upload.bin"
                 fields.contentType = part.contentType?.toString() ?: "application/octet-stream"
-                fields.content = part.provider().toByteArray().toString(Charsets.UTF_8)
+                fields.content = part.provider().toByteArray()
             }
             is PartData.FormItem -> {
                 when (part.name) {

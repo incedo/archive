@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 data class AlfrescoMultipartIntakePayload(
     val name: String,
     val nodeType: String?,
-    val content: String,
+    val content: ByteArray,
     val sourceSystem: String,
     val businessKey: String,
     val contentType: String,

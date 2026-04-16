@@ -1,9 +1,14 @@
 package archive.app
 
 import archive.adapters.api.GenericIntakeMapper
+import archive.adapters.api.ErrorResponse
 import archive.adapters.api.parseGenericMultipartIntake
 import archive.adapters.compat.alfresco.AlfrescoCompatibilityMapper
 import archive.adapters.compat.alfresco.parseAlfrescoMultipartIntake
+import archive.adapters.postgres.JdbcConnectionFactory
+import archive.adapters.postgres.PostgresDocumentIngestViewRepository
+import archive.adapters.postgres.PostgresEventStore
+import archive.adapters.postgres.PostgresSchemaInitializer
 import archive.application.intake.service.DocumentIntakeService
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -14,6 +19,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -23,16 +29,53 @@ fun main() {
     embeddedServer(Netty, port = 8080, module = Application::archiveModule).start(wait = true)
 }
 
+private data class PersistenceAdapters(
+    val eventStore: archive.ports.eventstore.EventStore,
+    val repository: archive.ports.readmodel.DocumentIngestViewRepository,
+)
+
+private fun readSetting(name: String): String? =
+    System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: System.getProperty(name)?.takeIf { it.isNotBlank() }
+
+private fun createPersistenceAdapters(): PersistenceAdapters {
+    val jdbcUrl = readSetting("ARCHIVE_JDBC_URL")
+    if (jdbcUrl == null) {
+        return PersistenceAdapters(
+            eventStore = InMemoryEventStore(),
+            repository = InMemoryDocumentIngestViewRepository(),
+        )
+    }
+
+    val connectionFactory = JdbcConnectionFactory(
+        jdbcUrl = jdbcUrl,
+        username = readSetting("ARCHIVE_JDBC_USER"),
+        password = readSetting("ARCHIVE_JDBC_PASSWORD"),
+    )
+    PostgresSchemaInitializer(connectionFactory).initialize()
+
+    return PersistenceAdapters(
+        eventStore = PostgresEventStore(connectionFactory),
+        repository = PostgresDocumentIngestViewRepository(connectionFactory),
+    )
+}
+
 fun Application.archiveModule() {
+    val persistence = createPersistenceAdapters()
     val service = DocumentIntakeService(
         checksumService = Sha256ChecksumService(),
-        eventStore = InMemoryEventStore(),
-        repository = InMemoryDocumentIngestViewRepository(),
+        eventStore = persistence.eventStore,
+        repository = persistence.repository,
     )
 
     install(CallLogging)
     install(ContentNegotiation) {
         json()
+    }
+    install(StatusPages) {
+        exception<IllegalArgumentException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(cause.message ?: "invalid request"))
+        }
     }
 
     routing {
