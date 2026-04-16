@@ -11,7 +11,8 @@ class GetDocumentIngestQueryHandler(
     private val repository: DocumentIngestViewRepository,
     private val projector: DocumentIngestProjector = DocumentIngestProjector(),
 ) {
-    fun handle(documentId: String): DocumentIngestView? {
+    fun handle(query: GetDocumentIngestQuery): DocumentIngestView? {
+        val documentId = query.documentId
         repository.findById(documentId)?.let { return it }
 
         val rebuilt = projector.project(

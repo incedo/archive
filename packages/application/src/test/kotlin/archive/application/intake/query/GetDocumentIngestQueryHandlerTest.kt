@@ -50,7 +50,7 @@ class GetDocumentIngestQueryHandlerTest {
             repository = repository,
         )
 
-        val rebuilt = handler.handle(documentId)
+        val rebuilt = handler.handle(GetDocumentIngestQuery(documentId))
 
         assertNotNull(rebuilt)
         assertEquals(documentId, rebuilt.documentId)

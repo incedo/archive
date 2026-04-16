@@ -99,7 +99,7 @@ fun Application.archiveModule() {
 
         get("/api/v1/documents/{id}/ingest") {
             val documentId = requireNotNull(call.parameters["id"]) { "document id is required" }
-            val view = getDocumentIngestQueryHandler.handle(documentId)
+            val view = getDocumentIngestQueryHandler.handle(GenericIntakeMapper.toQuery(documentId))
             if (view == null) {
                 call.respond(HttpStatusCode.NotFound)
             } else {

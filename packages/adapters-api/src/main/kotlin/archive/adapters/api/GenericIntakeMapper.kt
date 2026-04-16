@@ -1,17 +1,21 @@
 package archive.adapters.api
 
-import archive.domain.intake.command.RegisterDocumentIntake
+import archive.application.intake.command.RegisterDocumentIntakeRequest
+import archive.application.intake.query.GetDocumentIngestQuery
 import archive.ports.readmodel.DocumentIngestView
 
 object GenericIntakeMapper {
-    fun toCommand(request: GenericMultipartIntakePayload): RegisterDocumentIntake =
-        RegisterDocumentIntake(
+    fun toCommand(request: GenericMultipartIntakePayload): RegisterDocumentIntakeRequest =
+        RegisterDocumentIntakeRequest(
             fileName = request.fileName,
             contentType = request.contentType,
             content = request.content,
             documentTypeHint = request.documentTypeHint,
             metadata = request.metadata,
         )
+
+    fun toQuery(documentId: String): GetDocumentIngestQuery =
+        GetDocumentIngestQuery(documentId = documentId)
 
     fun toResponse(view: DocumentIngestView): GenericDocumentIntakeResponse =
         GenericDocumentIntakeResponse(

@@ -18,7 +18,14 @@ class RegisterDocumentIntakeHandler(
     private val repository: DocumentIngestViewRepository,
     private val projector: DocumentIngestProjector = DocumentIngestProjector(),
 ) {
-    fun handle(command: RegisterDocumentIntake): DocumentIngestView {
+    fun handle(request: RegisterDocumentIntakeRequest): DocumentIngestView {
+        val command = RegisterDocumentIntake(
+            fileName = request.fileName,
+            contentType = request.contentType,
+            content = request.content,
+            documentTypeHint = request.documentTypeHint,
+            metadata = request.metadata,
+        )
         DocumentIntakeValidation.validate(command)
 
         val documentId = DocumentId.generate()

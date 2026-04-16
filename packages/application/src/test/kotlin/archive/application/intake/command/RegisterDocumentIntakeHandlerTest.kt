@@ -1,6 +1,5 @@
 package archive.application.intake.command
 
-import archive.domain.intake.command.RegisterDocumentIntake
 import archive.domain.intake.event.DocumentChecksumRecorded
 import archive.domain.intake.event.DocumentIngestStatusUpdated
 import archive.domain.intake.event.DocumentIntakeRequested
@@ -44,8 +43,8 @@ class RegisterDocumentIntakeHandlerTest {
     }
 }
 
-private fun validCommand(): RegisterDocumentIntake =
-    RegisterDocumentIntake(
+private fun validCommand(): RegisterDocumentIntakeRequest =
+    RegisterDocumentIntakeRequest(
         fileName = "contract.pdf",
         contentType = "application/pdf",
         content = "hello".encodeToByteArray(),
