@@ -9,6 +9,7 @@ import archive.adapters.postgres.JdbcConnectionFactory
 import archive.adapters.postgres.PostgresDocumentIngestViewRepository
 import archive.adapters.postgres.PostgresEventStore
 import archive.adapters.postgres.PostgresSchemaInitializer
+import archive.application.intake.command.RegisterDocumentIntakeHandler
 import archive.application.intake.service.DocumentIntakeService
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -62,8 +63,12 @@ private fun createPersistenceAdapters(): PersistenceAdapters {
 
 fun Application.archiveModule() {
     val persistence = createPersistenceAdapters()
-    val service = DocumentIntakeService(
+    val registerDocumentIntakeHandler = RegisterDocumentIntakeHandler(
         checksumService = Sha256ChecksumService(),
+        eventStore = persistence.eventStore,
+        repository = persistence.repository,
+    )
+    val service = DocumentIntakeService(
         eventStore = persistence.eventStore,
         repository = persistence.repository,
     )
@@ -81,14 +86,14 @@ fun Application.archiveModule() {
     routing {
         post("/api/v1/documents/intake") {
             val request = parseGenericMultipartIntake(call)
-            val view = service.register(GenericIntakeMapper.toCommand(request))
+            val view = registerDocumentIntakeHandler.handle(GenericIntakeMapper.toCommand(request))
             call.respond(HttpStatusCode.Created, GenericIntakeMapper.toResponse(view))
         }
 
         post("/alfresco/api/-default-/public/alfresco/versions/1/nodes/-root-/children") {
             val request = parseAlfrescoMultipartIntake(call)
             val genericRequest = AlfrescoCompatibilityMapper.toGenericRequest(request)
-            val view = service.register(GenericIntakeMapper.toCommand(genericRequest))
+            val view = registerDocumentIntakeHandler.handle(GenericIntakeMapper.toCommand(genericRequest))
             call.respond(HttpStatusCode.Created, AlfrescoCompatibilityMapper.toCompatibilityResponse(view))
         }
 

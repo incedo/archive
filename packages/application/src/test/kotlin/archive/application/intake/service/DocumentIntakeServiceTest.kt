@@ -1,6 +1,5 @@
 package archive.application.intake.service
 
-import archive.domain.intake.command.RegisterDocumentIntake
 import archive.domain.intake.event.DocumentChecksumRecorded
 import archive.domain.intake.event.DocumentIngestStatusUpdated
 import archive.domain.intake.event.DocumentIntakeRequested
@@ -8,7 +7,6 @@ import archive.domain.intake.event.DomainEvent
 import archive.domain.intake.model.Checksum
 import archive.domain.intake.model.DocumentMetadata
 import archive.domain.intake.model.IngestStatus
-import archive.ports.checksum.ChecksumService
 import archive.ports.eventstore.AppendCondition
 import archive.ports.eventstore.EventStore
 import archive.ports.readmodel.DocumentIngestView
@@ -16,34 +14,8 @@ import archive.ports.readmodel.DocumentIngestViewRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class DocumentIntakeServiceTest {
-    @Test
-    fun `register queries event history before append`() {
-        val eventStore = RecordingEventStore()
-        val repository = RecordingRepository()
-        val service = DocumentIntakeService(
-            checksumService = FixedChecksumService(),
-            eventStore = eventStore,
-            repository = repository,
-        )
-
-        val view = service.register(validCommand())
-
-        assertEquals(1, eventStore.loadedTags.size)
-        assertTrue(eventStore.loadedTags.single().startsWith("document:"))
-        assertEquals(eventStore.loadedTags.single(), eventStore.appendedEvents.first().tags.single())
-        assertEquals(
-            AppendCondition.TagEventCount(
-                tag = eventStore.loadedTags.single(),
-                expectedCount = 0,
-            ),
-            eventStore.appendConditions.single(),
-        )
-        assertEquals(view, repository.saved.single())
-    }
-
     @Test
     fun `get rebuilds ingest view from event history when read model is missing`() {
         val checksum = Checksum("SHA-256", "rebuilt")
@@ -74,7 +46,6 @@ class DocumentIntakeServiceTest {
         )
         val repository = RecordingRepository()
         val service = DocumentIntakeService(
-            checksumService = FixedChecksumService(),
             eventStore = eventStore,
             repository = repository,
         )
@@ -88,43 +59,14 @@ class DocumentIntakeServiceTest {
     }
 }
 
-private fun validCommand(): RegisterDocumentIntake =
-    RegisterDocumentIntake(
-        fileName = "contract.pdf",
-        contentType = "application/pdf",
-        content = "hello".encodeToByteArray(),
-        documentTypeHint = "contract",
-        metadata = DocumentMetadata(
-            sourceSystem = "manual-upload",
-            businessKey = "CTR-1",
-        ),
-    )
-
-private class FixedChecksumService : ChecksumService {
-    override fun calculate(content: ByteArray): Checksum = Checksum("SHA-256", "fixed")
-}
-
 private class RecordingEventStore(
     private val eventsByTag: MutableMap<String, MutableList<DomainEvent>> = mutableMapOf(),
 ) : EventStore {
-    val loadedTags = mutableListOf<String>()
-    val appendedEvents = mutableListOf<DomainEvent>()
-    val appendConditions = mutableListOf<AppendCondition>()
-
     override fun append(events: List<DomainEvent>, condition: AppendCondition) {
-        appendConditions += condition
-        appendedEvents += events
-        events.forEach { event ->
-            event.tags.forEach { tag ->
-                eventsByTag.getOrPut(tag) { mutableListOf() }.add(event)
-            }
-        }
+        error("append should not be called in query test")
     }
 
-    override fun loadByTag(tag: String): List<DomainEvent> {
-        loadedTags += tag
-        return eventsByTag[tag].orEmpty()
-    }
+    override fun loadByTag(tag: String): List<DomainEvent> = eventsByTag[tag].orEmpty()
 }
 
 private class RecordingRepository : DocumentIngestViewRepository {
