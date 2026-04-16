@@ -1,0 +1,11 @@
+.git
+.github
+.gradle
+.idea
+.kotlin
+build
+**/build
+out
+.DS_Store
+resume-gemini.sh
+

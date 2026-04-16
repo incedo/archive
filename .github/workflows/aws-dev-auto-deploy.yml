@@ -1,0 +1,123 @@
+name: AWS Dev Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  JAVA_VERSION: "21"
+
+jobs:
+  build-and-push-dev:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image_uri: ${{ steps.image.outputs.image_uri }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: ./gradlew --no-daemon test
+
+      - name: Resolve AWS dev configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: dev
+          AWS_REGION_VAR: ${{ vars.AWS_REGION }}
+          AWS_DEPLOY_ROLE_ARN_VAR: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_ECR_REPOSITORY_VAR: ${{ vars.AWS_ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/aws/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          aws_region="${AWS_REGION:-${AWS_REGION_VAR:-}}"
+          aws_deploy_role_arn="${AWS_DEPLOY_ROLE_ARN:-${AWS_DEPLOY_ROLE_ARN_VAR:-}}"
+          ecr_repository="${AWS_ECR_REPOSITORY:-${AWS_ECR_REPOSITORY_VAR:-}}"
+
+          missing=0
+          for name in aws_region aws_deploy_role_arn ecr_repository; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required GitHub environment variable: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure deploy/aws/${TARGET_ENVIRONMENT}.env or GitHub environment variable AWS_REGION, AWS_DEPLOY_ROLE_ARN, and AWS_ECR_REPOSITORY for the dev environment." >&2
+            exit 1
+          fi
+
+          {
+            echo "aws_region=$aws_region"
+            echo "aws_deploy_role_arn=$aws_deploy_role_arn"
+            echo "ecr_repository=$ecr_repository"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.aws_deploy_role_arn }}
+          aws-region: ${{ steps.config.outputs.aws_region }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ steps.config.outputs.ecr_repository }}
+          tags: |
+            type=sha,format=long,prefix=sha-
+            type=sha,format=short,prefix=sha-
+            type=raw,value=dev-latest
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Capture image URI
+        id: image
+        run: echo "image_uri=${{ steps.ecr.outputs.registry }}/${{ steps.config.outputs.ecr_repository }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  deploy-dev:
+    needs: build-and-push-dev
+    uses: ./.github/workflows/deploy-aws.yml
+    with:
+      environment: dev
+      image_uri: ${{ needs.build-and-push-dev.outputs.image_uri }}
+    secrets: inherit

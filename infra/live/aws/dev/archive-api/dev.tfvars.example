@@ -1,0 +1,28 @@
+project_name       = "archive"
+environment        = "dev"
+aws_region         = "eu-west-1"
+service_name       = "archive-api"
+container_name     = "archive-api"
+image_uri          = "public.ecr.aws/docker/library/nginx:stable-alpine"
+vpc_cidr           = "10.42.0.0/16"
+public_subnet_cidrs = [
+  "10.42.1.0/24",
+  "10.42.2.0/24",
+]
+allowed_ingress_cidrs = []
+
+# Replace these with the real database values before running application tasks.
+jdbc_url      = "jdbc:postgresql://replace-me:5432/archive"
+jdbc_user     = "archive"
+jdbc_password = "replace-me"
+
+# Keep the first apply safe: create the runtime foundation without starting tasks.
+assign_public_ip    = true
+desired_count       = 0
+cpu                 = 256
+memory              = 512
+log_retention_in_days = 14
+
+tags = {
+  Owner = "archive"
+}

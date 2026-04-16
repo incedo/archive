@@ -182,6 +182,23 @@ Wel zou ik kiezen voor:
 - cloud-specifieke implementaties
 - gedeelde standaarden op hoofdniveau
 
+## Automation rule
+
+Voor dit project geldt aanvullend deze harde regel:
+
+- er wordt geen cloud-infrastructuur handmatig aangemaakt via console-clicks voor AWS of Scaleway
+- namen, identifiers, endpoints en deployment-targets worden niet handmatig opgezocht en overgetypt als structurele werkwijze
+- provisioning gebeurt via `OpenTofu`
+- deployment-automation leest waar mogelijk uit `IaC` outputs, gegenereerde env-bestanden of pipeline-configuratie die uit `IaC` is afgeleid
+- handmatige invoer is alleen acceptabel voor bootstrap-secrets of credentials die bewust buiten versiebeheer moeten blijven
+
+Concreet betekent dit:
+
+- `ECR`, `ECS`, netwerken, security groups, registries, runtime services en vergelijkbare bouwstenen horen in `IaC`
+- hetzelfde geldt later voor Scaleway Container Registry, Serverless Containers, netwerken en secrets-wiring
+- workflow-inputs mogen tijdelijk bestaan voor bootstrap of break-glass scenario's, maar zijn niet de gewenste steady-state
+- de steady-state is: `IaC` apply -> outputs -> automation consumeert die outputs
+
 Dat geeft je consistentie zonder dat je de echte verschillen tussen `AWS` en `Scaleway` probeert weg te modelleren.
 
 ## Bronnen

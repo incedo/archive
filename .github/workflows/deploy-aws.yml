@@ -1,0 +1,188 @@
+name: Deploy AWS ECS
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_uri:
+        required: true
+        type: string
+      aws_region:
+        required: false
+        type: string
+      ecs_cluster:
+        required: false
+        type: string
+      ecs_service:
+        required: false
+        type: string
+      ecs_task_family:
+        required: false
+        type: string
+      container_name:
+        required: false
+        type: string
+      aws_deploy_role_arn:
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      image_uri:
+        description: Full immutable image URI to deploy
+        required: true
+        type: string
+      aws_region:
+        description: AWS region for the target ECS environment
+        required: false
+        type: string
+      ecs_cluster:
+        description: ECS cluster name
+        required: false
+        type: string
+      ecs_service:
+        description: ECS service name
+        required: false
+        type: string
+      ecs_task_family:
+        description: ECS task definition family
+        required: false
+        type: string
+      container_name:
+        description: Container name inside the task definition
+        required: false
+        type: string
+      aws_deploy_role_arn:
+        description: IAM role ARN assumed through GitHub OIDC
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-aws-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_AWS_REGION: ${{ inputs.aws_region }}
+          INPUT_ECS_CLUSTER: ${{ inputs.ecs_cluster }}
+          INPUT_ECS_SERVICE: ${{ inputs.ecs_service }}
+          INPUT_ECS_TASK_FAMILY: ${{ inputs.ecs_task_family }}
+          INPUT_CONTAINER_NAME: ${{ inputs.container_name }}
+          INPUT_AWS_DEPLOY_ROLE_ARN: ${{ inputs.aws_deploy_role_arn }}
+          VAR_AWS_REGION: ${{ vars.AWS_REGION }}
+          VAR_AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          VAR_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+          VAR_ECS_SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+          VAR_ECS_TASK_FAMILY: ${{ vars.AWS_ECS_TASK_FAMILY }}
+          VAR_CONTAINER_NAME: ${{ vars.AWS_ECS_CONTAINER_NAME }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/aws/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          aws_region="${INPUT_AWS_REGION:-${AWS_REGION:-${VAR_AWS_REGION:-}}}"
+          aws_deploy_role_arn="${INPUT_AWS_DEPLOY_ROLE_ARN:-${AWS_DEPLOY_ROLE_ARN:-${VAR_AWS_DEPLOY_ROLE_ARN:-}}}"
+          ecs_cluster="${INPUT_ECS_CLUSTER:-${AWS_ECS_CLUSTER:-${VAR_ECS_CLUSTER:-}}}"
+          ecs_service="${INPUT_ECS_SERVICE:-${AWS_ECS_SERVICE:-${VAR_ECS_SERVICE:-}}}"
+          ecs_task_family="${INPUT_ECS_TASK_FAMILY:-${AWS_ECS_TASK_FAMILY:-${VAR_ECS_TASK_FAMILY:-}}}"
+          container_name="${INPUT_CONTAINER_NAME:-${AWS_ECS_CONTAINER_NAME:-${VAR_CONTAINER_NAME:-archive-api}}}"
+
+          missing=0
+          for name in aws_region aws_deploy_role_arn ecs_cluster ecs_service ecs_task_family container_name; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required deployment setting: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Provide workflow inputs, configure deploy/aws/${TARGET_ENVIRONMENT}.env, or set GitHub environment variables AWS_REGION, AWS_DEPLOY_ROLE_ARN, AWS_ECS_CLUSTER, AWS_ECS_SERVICE, AWS_ECS_TASK_FAMILY, AWS_ECS_CONTAINER_NAME." >&2
+            exit 1
+          fi
+
+          {
+            echo "aws_region=$aws_region"
+            echo "aws_deploy_role_arn=$aws_deploy_role_arn"
+            echo "ecs_cluster=$ecs_cluster"
+            echo "ecs_service=$ecs_service"
+            echo "ecs_task_family=$ecs_task_family"
+            echo "container_name=$container_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.aws_deploy_role_arn }}
+          aws-region: ${{ steps.config.outputs.aws_region }}
+
+      - name: Fetch current task definition
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition \
+            --task-definition "${{ steps.config.outputs.ecs_task_family }}" \
+            --query 'taskDefinition' \
+            > task-definition.json
+
+      - name: Render new task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ steps.config.outputs.container_name }}
+          image: ${{ inputs.image_uri }}
+
+      - name: Deploy task definition
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ steps.config.outputs.ecs_service }}
+          cluster: ${{ steps.config.outputs.ecs_cluster }}
+          wait-for-service-stability: true
+
+      - name: Publish deployment summary
+        run: |
+          {
+            echo "## AWS deployment"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Region: \`${{ steps.config.outputs.aws_region }}\`"
+            echo "- Deploy role: \`${{ steps.config.outputs.aws_deploy_role_arn }}\`"
+            echo "- ECS cluster: \`${{ steps.config.outputs.ecs_cluster }}\`"
+            echo "- ECS service: \`${{ steps.config.outputs.ecs_service }}\`"
+            echo "- Task family: \`${{ steps.config.outputs.ecs_task_family }}\`"
+            echo "- Container: \`${{ steps.config.outputs.container_name }}\`"
+            echo "- Image: \`${{ inputs.image_uri }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
