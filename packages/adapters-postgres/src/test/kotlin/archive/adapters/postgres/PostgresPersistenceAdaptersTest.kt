@@ -3,6 +3,7 @@ package archive.adapters.postgres
 import archive.domain.intake.event.DocumentChecksumRecorded
 import archive.domain.intake.event.DocumentIngestStatusUpdated
 import archive.domain.intake.event.DocumentIntakeRequested
+import archive.domain.intake.event.DomainEvent
 import archive.domain.intake.model.Checksum
 import archive.domain.intake.model.DocumentId
 import archive.domain.intake.model.DocumentMetadata
@@ -47,6 +48,17 @@ class PostgresPersistenceAdaptersTest {
             )
         )
 
+        val loadedEvents = eventStore.loadByTag("document:${documentId.value}")
+        assertEquals(3, loadedEvents.size)
+        assertEquals(
+            listOf(
+                "DocumentIntakeRequested",
+                "DocumentChecksumRecorded",
+                "DocumentIngestStatusUpdated",
+            ),
+            loadedEvents.map(DomainEvent::className)
+        )
+
         connectionFactory.open().use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeQuery("select count(*) from archive_events").use { rs ->
@@ -87,3 +99,6 @@ class PostgresPersistenceAdaptersTest {
         assertEquals(view, stored)
     }
 }
+
+private val DomainEvent.className: String
+    get() = this::class.simpleName ?: error("event should have a simple class name")

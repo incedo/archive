@@ -55,4 +55,31 @@ class PostgresEventStore(
             }
         }
     }
+
+    override fun loadByTag(tag: String): List<DomainEvent> =
+        connectionFactory.open().use { connection ->
+            connection.prepareStatement(
+                """
+                select e.event_type, e.payload_json
+                from archive_events e
+                join archive_event_tags t on t.event_id = e.id
+                where t.tag = ?
+                order by e.id asc
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, tag)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                codec.decode(
+                                    eventType = rs.getString("event_type"),
+                                    payload = rs.getString("payload_json"),
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
 }

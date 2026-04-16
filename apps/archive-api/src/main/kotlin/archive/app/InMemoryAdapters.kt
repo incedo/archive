@@ -24,6 +24,9 @@ class InMemoryEventStore : EventStore {
     override fun append(events: List<DomainEvent>) {
         this.events.addAll(events)
     }
+
+    override fun loadByTag(tag: String): List<DomainEvent> =
+        events.filter { event -> tag in event.tags }
 }
 
 class InMemoryDocumentIngestViewRepository : DocumentIngestViewRepository {
