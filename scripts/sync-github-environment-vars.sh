@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-ENVIRONMENT="${1:-dev}"
-ENV_FILE="${ENV_FILE:-$REPO_ROOT/deploy/aws/${ENVIRONMENT}.env}"
+PROVIDER="${PROVIDER:-${1:-aws}}"
+ENVIRONMENT="${2:-dev}"
+ENV_FILE="${ENV_FILE:-$REPO_ROOT/deploy/${PROVIDER}/${ENVIRONMENT}.env}"
 GH_BIN="${GH_BIN:-gh}"
 REPO_SLUG="${REPO_SLUG:-}"
 DRY_RUN="${DRY_RUN:-0}"
@@ -43,15 +44,34 @@ if [ -z "$REPO_SLUG" ]; then
   exit 1
 fi
 
-required_keys=(
-  AWS_REGION
-  AWS_DEPLOY_ROLE_ARN
-  AWS_ECR_REPOSITORY
-  AWS_ECS_CLUSTER
-  AWS_ECS_SERVICE
-  AWS_ECS_TASK_FAMILY
-  AWS_ECS_CONTAINER_NAME
-)
+case "$PROVIDER" in
+  aws)
+    required_keys=(
+      AWS_REGION
+      AWS_DEPLOY_ROLE_ARN
+      AWS_ECR_REPOSITORY
+      AWS_ECS_CLUSTER
+      AWS_ECS_SERVICE
+      AWS_ECS_TASK_FAMILY
+      AWS_ECS_CONTAINER_NAME
+    )
+    ;;
+  scaleway)
+    required_keys=(
+      SCALEWAY_PROJECT_ID
+      SCALEWAY_REGION
+      SCALEWAY_ZONE
+      SCW_CONTAINER_NAMESPACE
+      SCW_CONTAINER_NAME
+      SCW_CONTAINER_DOMAIN
+    )
+    ;;
+  *)
+    echo "Unsupported provider: $PROVIDER" >&2
+    echo "Expected one of: aws, scaleway" >&2
+    exit 1
+    ;;
+esac
 
 missing_keys=()
 for key in "${required_keys[@]}"; do
@@ -67,6 +87,7 @@ if [ "${#missing_keys[@]}" -gt 0 ]; then
 fi
 
 echo "Repository: $REPO_SLUG"
+echo "Provider: $PROVIDER"
 echo "Environment: $ENVIRONMENT"
 echo "Env file: $ENV_FILE"
 

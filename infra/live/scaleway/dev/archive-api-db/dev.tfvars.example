@@ -1,0 +1,21 @@
+project_name                = "archive"
+environment                 = "dev"
+scaleway_project_id         = "11111111-1111-1111-1111-111111111111"
+scaleway_region             = "nl-ams"
+scaleway_zone               = "nl-ams-1"
+service_name                = "archive-api"
+private_network_name        = "archive-dev-private"
+private_network_subnet_cidr = "172.16.0.0/24"
+
+db_name                          = "archive"
+db_username                      = "archive"
+db_engine                        = "PostgreSQL-16"
+db_node_type                     = "DB-DEV-S"
+db_is_ha_cluster                 = false
+db_disable_backup                = false
+db_backup_schedule_frequency_hours = 24
+db_backup_schedule_retention_days  = 1
+
+tags = [
+  "owner:archive",
+]

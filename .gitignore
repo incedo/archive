@@ -4,6 +4,8 @@
 build/
 out/
 deploy/aws/*.env
+deploy/scaleway/*.env
+config/local/*.env
 infra/live/**/*.tfvars
 infra/live/**/.terraform/
 infra/live/**/terraform.tfstate

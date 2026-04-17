@@ -1,0 +1,19 @@
+project_name         = "archive"
+environment          = "dev"
+scaleway_project_id  = "11111111-1111-1111-1111-111111111111"
+scaleway_region      = "nl-ams"
+scaleway_zone        = "nl-ams-1"
+service_name         = "archive-api"
+container_name       = "archive-api"
+container_port       = 8080
+image_reference      = "docker.io/library/nginx:stable-alpine"
+
+min_scale    = 0
+max_scale    = 1
+cpu_limit    = 280
+memory_limit = 512
+privacy      = "public"
+
+tags = [
+  "owner:archive",
+]
