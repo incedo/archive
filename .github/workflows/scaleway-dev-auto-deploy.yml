@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     outputs:
-      image_reference: ${{ steps.image.outputs.image_reference }}
+      image_reference: ${{ steps.build.outputs.image_reference }}
 
     steps:
       - name: Checkout
@@ -39,6 +39,7 @@ jobs:
         shell: bash
         env:
           TARGET_ENVIRONMENT: dev
+          SCALEWAY_ORGANIZATION_ID_VAR: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
           SCALEWAY_PROJECT_ID_VAR: ${{ vars.SCALEWAY_PROJECT_ID }}
           SCALEWAY_REGION_VAR: ${{ vars.SCALEWAY_REGION }}
           SCALEWAY_ZONE_VAR: ${{ vars.SCALEWAY_ZONE }}
@@ -54,6 +55,7 @@ jobs:
             set +a
           fi
 
+          scaleway_organization_id="${SCW_DEFAULT_ORGANIZATION_ID:-${SCALEWAY_ORGANIZATION_ID_VAR:-}}"
           scaleway_project_id="${SCALEWAY_PROJECT_ID:-${SCALEWAY_PROJECT_ID_VAR:-}}"
           scaleway_region="${SCALEWAY_REGION:-${SCALEWAY_REGION_VAR:-}}"
           scaleway_zone="${SCALEWAY_ZONE:-${SCALEWAY_ZONE_VAR:-}}"
@@ -61,7 +63,7 @@ jobs:
           container_name="${SCW_CONTAINER_NAME:-${CONTAINER_NAME_VAR:-archive-api}}"
 
           missing=0
-          for name in scaleway_project_id scaleway_region scaleway_zone container_registry_endpoint container_name; do
+          for name in scaleway_organization_id scaleway_project_id scaleway_region scaleway_zone container_registry_endpoint container_name; do
             value="${!name}"
             if [ -z "$value" ]; then
               echo "Missing required deployment setting: $name" >&2
@@ -70,11 +72,12 @@ jobs:
           done
 
           if [ "$missing" -ne 0 ]; then
-            echo "Configure deploy/scaleway/${TARGET_ENVIRONMENT}.env or GitHub environment variables SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_REGISTRY_ENDPOINT, and SCW_CONTAINER_NAME." >&2
+            echo "Configure deploy/scaleway/${TARGET_ENVIRONMENT}.env or GitHub environment variables SCW_DEFAULT_ORGANIZATION_ID, SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_REGISTRY_ENDPOINT, and SCW_CONTAINER_NAME." >&2
             exit 1
           fi
 
           {
+            echo "scaleway_organization_id=$scaleway_organization_id"
             echo "scaleway_project_id=$scaleway_project_id"
             echo "scaleway_region=$scaleway_region"
             echo "scaleway_zone=$scaleway_zone"
@@ -94,6 +97,7 @@ jobs:
         env:
           SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCW_DEFAULT_ORGANIZATION_ID: ${{ steps.config.outputs.scaleway_organization_id }}
           SCALEWAY_PROJECT_ID: ${{ steps.config.outputs.scaleway_project_id }}
           SCALEWAY_REGION: ${{ steps.config.outputs.scaleway_region }}
           SCALEWAY_ZONE: ${{ steps.config.outputs.scaleway_zone }}
@@ -109,6 +113,7 @@ jobs:
           cat > "$HOME/.config/scw/config.yaml" <<EOF
           access_key: ${SCW_ACCESS_KEY}
           secret_key: ${SCW_SECRET_KEY}
+          default_organization_id: ${SCW_DEFAULT_ORGANIZATION_ID}
           default_project_id: ${SCALEWAY_PROJECT_ID}
           default_region: ${SCALEWAY_REGION}
           default_zone: ${SCALEWAY_ZONE}

@@ -18,6 +18,9 @@ on:
       scaleway_project_id:
         required: false
         type: string
+      scaleway_organization_id:
+        required: false
+        type: string
       container_id:
         required: false
         type: string
@@ -48,6 +51,10 @@ on:
         type: string
       scaleway_project_id:
         description: Scaleway project id
+        required: false
+        type: string
+      scaleway_organization_id:
+        description: Scaleway organization id
         required: false
         type: string
       container_id:
@@ -88,10 +95,12 @@ jobs:
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           INPUT_SCALEWAY_PROJECT_ID: ${{ inputs.scaleway_project_id }}
+          INPUT_SCALEWAY_ORGANIZATION_ID: ${{ inputs.scaleway_organization_id }}
           INPUT_SCALEWAY_REGION: ${{ inputs.scaleway_region }}
           INPUT_SCALEWAY_ZONE: ${{ inputs.scaleway_zone }}
           INPUT_CONTAINER_ID: ${{ inputs.container_id }}
           INPUT_CONTAINER_NAME: ${{ inputs.container_name }}
+          VAR_SCALEWAY_ORGANIZATION_ID: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
           VAR_SCALEWAY_PROJECT_ID: ${{ vars.SCALEWAY_PROJECT_ID }}
           VAR_SCALEWAY_REGION: ${{ vars.SCALEWAY_REGION }}
           VAR_SCALEWAY_ZONE: ${{ vars.SCALEWAY_ZONE }}
@@ -107,6 +116,7 @@ jobs:
             set +a
           fi
 
+          scaleway_organization_id="${INPUT_SCALEWAY_ORGANIZATION_ID:-${SCW_DEFAULT_ORGANIZATION_ID:-${VAR_SCALEWAY_ORGANIZATION_ID:-}}}"
           scaleway_project_id="${INPUT_SCALEWAY_PROJECT_ID:-${SCALEWAY_PROJECT_ID:-${VAR_SCALEWAY_PROJECT_ID:-}}}"
           scaleway_region="${INPUT_SCALEWAY_REGION:-${SCALEWAY_REGION:-${VAR_SCALEWAY_REGION:-}}}"
           scaleway_zone="${INPUT_SCALEWAY_ZONE:-${SCALEWAY_ZONE:-${VAR_SCALEWAY_ZONE:-}}}"
@@ -114,7 +124,7 @@ jobs:
           container_name="${INPUT_CONTAINER_NAME:-${SCW_CONTAINER_NAME:-${VAR_CONTAINER_NAME:-archive-api}}}"
 
           missing=0
-          for name in scaleway_project_id scaleway_region scaleway_zone container_id container_name; do
+          for name in scaleway_organization_id scaleway_project_id scaleway_region scaleway_zone container_id container_name; do
             value="${!name}"
             if [ -z "$value" ]; then
               echo "Missing required deployment setting: $name" >&2
@@ -123,11 +133,12 @@ jobs:
           done
 
           if [ "$missing" -ne 0 ]; then
-            echo "Provide workflow inputs, configure deploy/scaleway/${TARGET_ENVIRONMENT}.env, or set GitHub environment variables SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_ID, and SCW_CONTAINER_NAME." >&2
+            echo "Provide workflow inputs, configure deploy/scaleway/${TARGET_ENVIRONMENT}.env, or set GitHub environment variables SCW_DEFAULT_ORGANIZATION_ID, SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_ID, and SCW_CONTAINER_NAME." >&2
             exit 1
           fi
 
           {
+            echo "scaleway_organization_id=$scaleway_organization_id"
             echo "scaleway_project_id=$scaleway_project_id"
             echo "scaleway_region=$scaleway_region"
             echo "scaleway_zone=$scaleway_zone"
@@ -140,6 +151,7 @@ jobs:
         env:
           SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCW_DEFAULT_ORGANIZATION_ID: ${{ steps.config.outputs.scaleway_organization_id }}
           SCALEWAY_PROJECT_ID: ${{ steps.config.outputs.scaleway_project_id }}
           SCALEWAY_REGION: ${{ steps.config.outputs.scaleway_region }}
           SCALEWAY_ZONE: ${{ steps.config.outputs.scaleway_zone }}
@@ -155,6 +167,7 @@ jobs:
           cat > "$HOME/.config/scw/config.yaml" <<EOF
           access_key: ${SCW_ACCESS_KEY}
           secret_key: ${SCW_SECRET_KEY}
+          default_organization_id: ${SCW_DEFAULT_ORGANIZATION_ID}
           default_project_id: ${SCALEWAY_PROJECT_ID}
           default_region: ${SCALEWAY_REGION}
           default_zone: ${SCALEWAY_ZONE}
@@ -177,6 +190,7 @@ jobs:
             echo "## Scaleway deployment"
             echo
             echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Organization: \`${{ steps.config.outputs.scaleway_organization_id }}\`"
             echo "- Project: \`${{ steps.config.outputs.scaleway_project_id }}\`"
             echo "- Region: \`${{ steps.config.outputs.scaleway_region }}\`"
             echo "- Zone: \`${{ steps.config.outputs.scaleway_zone }}\`"

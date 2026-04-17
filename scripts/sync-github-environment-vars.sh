@@ -58,6 +58,7 @@ case "$PROVIDER" in
     ;;
   scaleway)
     required_keys=(
+      SCW_DEFAULT_ORGANIZATION_ID
       SCALEWAY_PROJECT_ID
       SCALEWAY_REGION
       SCALEWAY_ZONE
