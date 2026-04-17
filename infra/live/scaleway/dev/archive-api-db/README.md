@@ -39,4 +39,5 @@ Commands:
 cd infra/live/scaleway/dev/archive-api-db
 TOFU_BIN=/Users/kees/data/projects/archive/tools/opentofu/bin/tofu ./plan.sh
 TOFU_BIN=/Users/kees/data/projects/archive/tools/opentofu/bin/tofu ./apply.sh
+TOFU_BIN=/Users/kees/data/projects/archive/tools/opentofu/bin/tofu ./destroy.sh
 ```

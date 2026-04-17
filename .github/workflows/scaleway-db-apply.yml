@@ -1,0 +1,197 @@
+name: Scaleway DB Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+        default: dev
+      db_node_type:
+        description: Scaleway DB node type
+        required: false
+        type: string
+        default: DB-DEV-S
+      db_name:
+        description: PostgreSQL database name
+        required: false
+        type: string
+        default: archive
+      db_username:
+        description: PostgreSQL username
+        required: false
+        type: string
+        default: archive
+      private_network_subnet_cidr:
+        description: Private network subnet CIDR
+        required: false
+        type: string
+        default: 172.16.0.0/24
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install OpenTofu
+        run: ./scripts/install-opentofu.sh
+
+      - name: Install Scaleway CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/scaleway/scaleway-cli/releases/download/v2.54.0/scaleway-cli_2.54.0_linux_amd64 -o /usr/local/bin/scw
+          chmod +x /usr/local/bin/scw
+          scw version
+
+      - name: Resolve Scaleway DB configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_DB_NODE_TYPE: ${{ inputs.db_node_type }}
+          INPUT_DB_NAME: ${{ inputs.db_name }}
+          INPUT_DB_USERNAME: ${{ inputs.db_username }}
+          INPUT_PRIVATE_NETWORK_SUBNET_CIDR: ${{ inputs.private_network_subnet_cidr }}
+          VAR_SCALEWAY_ORGANIZATION_ID: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
+          VAR_SCALEWAY_PROJECT_ID: ${{ vars.SCALEWAY_PROJECT_ID }}
+          VAR_SCALEWAY_REGION: ${{ vars.SCALEWAY_REGION }}
+          VAR_SCALEWAY_ZONE: ${{ vars.SCALEWAY_ZONE }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/scaleway/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          scaleway_organization_id="${SCW_DEFAULT_ORGANIZATION_ID:-${VAR_SCALEWAY_ORGANIZATION_ID:-}}"
+          scaleway_project_id="${SCALEWAY_PROJECT_ID:-${VAR_SCALEWAY_PROJECT_ID:-}}"
+          scaleway_region="${SCALEWAY_REGION:-${VAR_SCALEWAY_REGION:-}}"
+          scaleway_zone="${SCALEWAY_ZONE:-${VAR_SCALEWAY_ZONE:-}}"
+          db_node_type="${INPUT_DB_NODE_TYPE:-DB-DEV-S}"
+          db_name="${INPUT_DB_NAME:-archive}"
+          db_username="${INPUT_DB_USERNAME:-archive}"
+          private_network_subnet_cidr="${INPUT_PRIVATE_NETWORK_SUBNET_CIDR:-172.16.0.0/24}"
+
+          missing=0
+          for name in scaleway_organization_id scaleway_project_id scaleway_region scaleway_zone; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required configuration: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure GitHub environment variables SCW_DEFAULT_ORGANIZATION_ID, SCALEWAY_PROJECT_ID, SCALEWAY_REGION, and SCALEWAY_ZONE." >&2
+            exit 1
+          fi
+
+          {
+            echo "scaleway_organization_id=$scaleway_organization_id"
+            echo "scaleway_project_id=$scaleway_project_id"
+            echo "scaleway_region=$scaleway_region"
+            echo "scaleway_zone=$scaleway_zone"
+            echo "db_node_type=$db_node_type"
+            echo "db_name=$db_name"
+            echo "db_username=$db_username"
+            echo "private_network_subnet_cidr=$private_network_subnet_cidr"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure Scaleway CLI
+        shell: bash
+        env:
+          SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCW_DEFAULT_ORGANIZATION_ID: ${{ steps.config.outputs.scaleway_organization_id }}
+          SCALEWAY_PROJECT_ID: ${{ steps.config.outputs.scaleway_project_id }}
+          SCALEWAY_REGION: ${{ steps.config.outputs.scaleway_region }}
+          SCALEWAY_ZONE: ${{ steps.config.outputs.scaleway_zone }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SCW_ACCESS_KEY:-}" ] || [ -z "${SCW_SECRET_KEY:-}" ]; then
+            echo "Missing required GitHub environment secrets: SCW_ACCESS_KEY and/or SCW_SECRET_KEY" >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.config/scw"
+          cat > "$HOME/.config/scw/config.yaml" <<EOF
+          access_key: ${SCW_ACCESS_KEY}
+          secret_key: ${SCW_SECRET_KEY}
+          default_organization_id: ${SCW_DEFAULT_ORGANIZATION_ID}
+          default_project_id: ${SCALEWAY_PROJECT_ID}
+          default_region: ${SCALEWAY_REGION}
+          default_zone: ${SCALEWAY_ZONE}
+          EOF
+
+          scw config get default-project-id
+
+      - name: Write temporary tfvars
+        id: tfvars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tfvars_file="$RUNNER_TEMP/scaleway-db-${{ inputs.environment }}.tfvars"
+          cat > "$tfvars_file" <<EOF
+          scaleway_project_id = "${{ steps.config.outputs.scaleway_project_id }}"
+          scaleway_region = "${{ steps.config.outputs.scaleway_region }}"
+          scaleway_zone = "${{ steps.config.outputs.scaleway_zone }}"
+          db_node_type = "${{ steps.config.outputs.db_node_type }}"
+          db_name = "${{ steps.config.outputs.db_name }}"
+          db_username = "${{ steps.config.outputs.db_username }}"
+          private_network_subnet_cidr = "${{ steps.config.outputs.private_network_subnet_cidr }}"
+          EOF
+
+          echo "tfvars_file=$tfvars_file" >> "$GITHUB_OUTPUT"
+
+      - name: Apply Scaleway DB stack
+        shell: bash
+        env:
+          TOFU_BIN: ${{ github.workspace }}/tools/opentofu/bin/tofu
+          TFVARS_FILE: ${{ steps.tfvars.outputs.tfvars_file }}
+        run: |
+          set -euo pipefail
+          cd infra/live/scaleway/dev/archive-api-db
+          bash ./apply.sh
+
+      - name: Publish DB summary
+        shell: bash
+        env:
+          TOFU_BIN: ${{ github.workspace }}/tools/opentofu/bin/tofu
+        run: |
+          set -euo pipefail
+          cd infra/live/scaleway/dev/archive-api-db
+          private_network_id="$("$TOFU_BIN" output -raw private_network_id)"
+          database_instance_name="$("$TOFU_BIN" output -raw database_instance_name)"
+          database_private_ip="$("$TOFU_BIN" output -raw database_private_ip)"
+          database_port="$("$TOFU_BIN" output -raw database_port)"
+          jdbc_secret_path="$("$TOFU_BIN" output -raw jdbc_secret_path)"
+
+          {
+            echo "## Scaleway DB apply"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Project: \`${{ steps.config.outputs.scaleway_project_id }}\`"
+            echo "- Region: \`${{ steps.config.outputs.scaleway_region }}\`"
+            echo "- DB instance: \`${database_instance_name}\`"
+            echo "- Private network ID: \`${private_network_id}\`"
+            echo "- Database private endpoint: \`${database_private_ip}:${database_port}\`"
+            echo "- JDBC secret path: \`${jdbc_secret_path}\`"
+            echo
+            echo "Local follow-up:"
+            echo "\`./scripts/link-scaleway-dev-db.sh\`"
+          } >> "$GITHUB_STEP_SUMMARY"
