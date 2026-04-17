@@ -1,0 +1,186 @@
+name: Deploy Scaleway Container
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_reference:
+        required: true
+        type: string
+      scaleway_region:
+        required: false
+        type: string
+      scaleway_zone:
+        required: false
+        type: string
+      scaleway_project_id:
+        required: false
+        type: string
+      container_id:
+        required: false
+        type: string
+      container_name:
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      image_reference:
+        description: Full immutable image reference to deploy
+        required: true
+        type: string
+      scaleway_region:
+        description: Scaleway region
+        required: false
+        type: string
+      scaleway_zone:
+        description: Scaleway zone
+        required: false
+        type: string
+      scaleway_project_id:
+        description: Scaleway project id
+        required: false
+        type: string
+      container_id:
+        description: Scaleway container id
+        required: false
+        type: string
+      container_name:
+        description: Logical container name
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-scaleway-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Scaleway CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/scaleway/scaleway-cli/releases/download/v2.54.0/scaleway-cli_2.54.0_linux_amd64 -o /usr/local/bin/scw
+          chmod +x /usr/local/bin/scw
+          scw version
+
+      - name: Resolve deployment configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_SCALEWAY_PROJECT_ID: ${{ inputs.scaleway_project_id }}
+          INPUT_SCALEWAY_REGION: ${{ inputs.scaleway_region }}
+          INPUT_SCALEWAY_ZONE: ${{ inputs.scaleway_zone }}
+          INPUT_CONTAINER_ID: ${{ inputs.container_id }}
+          INPUT_CONTAINER_NAME: ${{ inputs.container_name }}
+          VAR_SCALEWAY_PROJECT_ID: ${{ vars.SCALEWAY_PROJECT_ID }}
+          VAR_SCALEWAY_REGION: ${{ vars.SCALEWAY_REGION }}
+          VAR_SCALEWAY_ZONE: ${{ vars.SCALEWAY_ZONE }}
+          VAR_CONTAINER_ID: ${{ vars.SCW_CONTAINER_ID }}
+          VAR_CONTAINER_NAME: ${{ vars.SCW_CONTAINER_NAME }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/scaleway/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          scaleway_project_id="${INPUT_SCALEWAY_PROJECT_ID:-${SCALEWAY_PROJECT_ID:-${VAR_SCALEWAY_PROJECT_ID:-}}}"
+          scaleway_region="${INPUT_SCALEWAY_REGION:-${SCALEWAY_REGION:-${VAR_SCALEWAY_REGION:-}}}"
+          scaleway_zone="${INPUT_SCALEWAY_ZONE:-${SCALEWAY_ZONE:-${VAR_SCALEWAY_ZONE:-}}}"
+          container_id="${INPUT_CONTAINER_ID:-${SCW_CONTAINER_ID:-${VAR_CONTAINER_ID:-}}}"
+          container_name="${INPUT_CONTAINER_NAME:-${SCW_CONTAINER_NAME:-${VAR_CONTAINER_NAME:-archive-api}}}"
+
+          missing=0
+          for name in scaleway_project_id scaleway_region scaleway_zone container_id container_name; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required deployment setting: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Provide workflow inputs, configure deploy/scaleway/${TARGET_ENVIRONMENT}.env, or set GitHub environment variables SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_ID, and SCW_CONTAINER_NAME." >&2
+            exit 1
+          fi
+
+          {
+            echo "scaleway_project_id=$scaleway_project_id"
+            echo "scaleway_region=$scaleway_region"
+            echo "scaleway_zone=$scaleway_zone"
+            echo "container_id=$container_id"
+            echo "container_name=$container_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure Scaleway CLI
+        shell: bash
+        env:
+          SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCALEWAY_PROJECT_ID: ${{ steps.config.outputs.scaleway_project_id }}
+          SCALEWAY_REGION: ${{ steps.config.outputs.scaleway_region }}
+          SCALEWAY_ZONE: ${{ steps.config.outputs.scaleway_zone }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SCW_ACCESS_KEY:-}" ] || [ -z "${SCW_SECRET_KEY:-}" ]; then
+            echo "Missing required GitHub environment secrets: SCW_ACCESS_KEY and/or SCW_SECRET_KEY" >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.config/scw"
+          cat > "$HOME/.config/scw/config.yaml" <<EOF
+          access_key: ${SCW_ACCESS_KEY}
+          secret_key: ${SCW_SECRET_KEY}
+          default_project_id: ${SCALEWAY_PROJECT_ID}
+          default_region: ${SCALEWAY_REGION}
+          default_zone: ${SCALEWAY_ZONE}
+          EOF
+
+          scw config get default-project-id
+
+      - name: Update and deploy container
+        shell: bash
+        run: |
+          set -euo pipefail
+          scw container container update "${{ steps.config.outputs.container_id }}" \
+            registry-image="${{ inputs.image_reference }}" \
+            region="${{ steps.config.outputs.scaleway_region }}" \
+            -w
+
+      - name: Publish deployment summary
+        run: |
+          {
+            echo "## Scaleway deployment"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Project: \`${{ steps.config.outputs.scaleway_project_id }}\`"
+            echo "- Region: \`${{ steps.config.outputs.scaleway_region }}\`"
+            echo "- Zone: \`${{ steps.config.outputs.scaleway_zone }}\`"
+            echo "- Container: \`${{ steps.config.outputs.container_name }}\`"
+            echo "- Container ID: \`${{ steps.config.outputs.container_id }}\`"
+            echo "- Image: \`${{ inputs.image_reference }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

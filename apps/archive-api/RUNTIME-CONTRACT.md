@@ -61,3 +61,16 @@ Expected deployment contract:
 Operator guide:
 
 - [AWS_DEV_DEPLOYMENT_INPUTS.md](/Users/kees/data/projects/archive/specs/AWS_DEV_DEPLOYMENT_INPUTS.md)
+
+## Scaleway Serverless Containers baseline
+
+The first Scaleway deployment baseline is Serverless Containers.
+
+Expected deployment contract:
+
+- the deployment workflow builds one immutable image reference and pushes it to a Scaleway registry endpoint
+- the target Serverless Container already exists for the selected environment
+- runtime secrets for the cheap default stack are optional; when omitted, the app runs in in-memory mode
+- when the optional DB stack is enabled, JDBC settings are injected through environment-specific configuration, not baked into the image
+- Scaleway deployment auth currently uses API keys; these should live in GitHub environment secrets, not repository files
+- non-secret Scaleway runtime identifiers should come from IaC outputs and GitHub environment variables

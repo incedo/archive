@@ -19,6 +19,8 @@ scaleway_region="$("$TOFU_BIN" output -raw scaleway_region)"
 scaleway_zone="$("$TOFU_BIN" output -raw scaleway_zone)"
 container_namespace_name="$("$TOFU_BIN" output -raw container_namespace_name)"
 container_name="$("$TOFU_BIN" output -raw container_name)"
+container_id="$("$TOFU_BIN" output -raw container_id)"
+container_registry_endpoint="$("$TOFU_BIN" output -raw container_registry_endpoint)"
 container_domain_name="$("$TOFU_BIN" output -raw container_domain_name)"
 private_network_id="$("$TOFU_BIN" output -raw private_network_id 2>/dev/null || true)"
 
@@ -28,6 +30,8 @@ SCALEWAY_REGION=$scaleway_region
 SCALEWAY_ZONE=$scaleway_zone
 SCW_CONTAINER_NAMESPACE=$container_namespace_name
 SCW_CONTAINER_NAME=$container_name
+SCW_CONTAINER_ID=$container_id
+SCW_CONTAINER_REGISTRY_ENDPOINT=$container_registry_endpoint
 SCW_CONTAINER_DOMAIN=$container_domain_name
 EOF
 

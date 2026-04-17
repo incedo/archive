@@ -1,0 +1,158 @@
+name: Scaleway Dev Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: "21"
+
+jobs:
+  build-and-push-dev:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image_reference: ${{ steps.image.outputs.image_reference }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: ./gradlew --no-daemon test
+
+      - name: Resolve Scaleway dev configuration
+        id: config
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: dev
+          SCALEWAY_PROJECT_ID_VAR: ${{ vars.SCALEWAY_PROJECT_ID }}
+          SCALEWAY_REGION_VAR: ${{ vars.SCALEWAY_REGION }}
+          SCALEWAY_ZONE_VAR: ${{ vars.SCALEWAY_ZONE }}
+          CONTAINER_REGISTRY_ENDPOINT_VAR: ${{ vars.SCW_CONTAINER_REGISTRY_ENDPOINT }}
+          CONTAINER_NAME_VAR: ${{ vars.SCW_CONTAINER_NAME }}
+        run: |
+          set -euo pipefail
+
+          config_file="deploy/scaleway/${TARGET_ENVIRONMENT}.env"
+          if [ -f "$config_file" ]; then
+            set -a
+            . "$config_file"
+            set +a
+          fi
+
+          scaleway_project_id="${SCALEWAY_PROJECT_ID:-${SCALEWAY_PROJECT_ID_VAR:-}}"
+          scaleway_region="${SCALEWAY_REGION:-${SCALEWAY_REGION_VAR:-}}"
+          scaleway_zone="${SCALEWAY_ZONE:-${SCALEWAY_ZONE_VAR:-}}"
+          container_registry_endpoint="${SCW_CONTAINER_REGISTRY_ENDPOINT:-${CONTAINER_REGISTRY_ENDPOINT_VAR:-}}"
+          container_name="${SCW_CONTAINER_NAME:-${CONTAINER_NAME_VAR:-archive-api}}"
+
+          missing=0
+          for name in scaleway_project_id scaleway_region scaleway_zone container_registry_endpoint container_name; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing required deployment setting: $name" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure deploy/scaleway/${TARGET_ENVIRONMENT}.env or GitHub environment variables SCALEWAY_PROJECT_ID, SCALEWAY_REGION, SCALEWAY_ZONE, SCW_CONTAINER_REGISTRY_ENDPOINT, and SCW_CONTAINER_NAME." >&2
+            exit 1
+          fi
+
+          {
+            echo "scaleway_project_id=$scaleway_project_id"
+            echo "scaleway_region=$scaleway_region"
+            echo "scaleway_zone=$scaleway_zone"
+            echo "container_registry_endpoint=$container_registry_endpoint"
+            echo "container_name=$container_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Scaleway CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/scaleway/scaleway-cli/releases/download/v2.54.0/scaleway-cli_2.54.0_linux_amd64 -o /usr/local/bin/scw
+          chmod +x /usr/local/bin/scw
+          scw version
+
+      - name: Configure Scaleway CLI
+        shell: bash
+        env:
+          SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCALEWAY_PROJECT_ID: ${{ steps.config.outputs.scaleway_project_id }}
+          SCALEWAY_REGION: ${{ steps.config.outputs.scaleway_region }}
+          SCALEWAY_ZONE: ${{ steps.config.outputs.scaleway_zone }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SCW_ACCESS_KEY:-}" ] || [ -z "${SCW_SECRET_KEY:-}" ]; then
+            echo "Missing required GitHub environment secrets: SCW_ACCESS_KEY and/or SCW_SECRET_KEY" >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.config/scw"
+          cat > "$HOME/.config/scw/config.yaml" <<EOF
+          access_key: ${SCW_ACCESS_KEY}
+          secret_key: ${SCW_SECRET_KEY}
+          default_project_id: ${SCALEWAY_PROJECT_ID}
+          default_region: ${SCALEWAY_REGION}
+          default_zone: ${SCALEWAY_ZONE}
+          EOF
+
+      - name: Login to Scaleway Container Registry
+        shell: bash
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          echo "${SCW_SECRET_KEY}" | docker login "${{ steps.config.outputs.container_registry_endpoint }}" -u nologin --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        id: build
+        shell: bash
+        env:
+          IMAGE_BASE: ${{ steps.config.outputs.container_registry_endpoint }}/${{ steps.config.outputs.container_name }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image_ref="${IMAGE_BASE}:sha-${GIT_SHA}"
+          docker build -f Dockerfile -t "$image_ref" .
+          docker push "$image_ref"
+          echo "image_reference=$image_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Publish build summary
+        run: |
+          {
+            echo "## Scaleway image build"
+            echo
+            echo "- Project: \`${{ steps.config.outputs.scaleway_project_id }}\`"
+            echo "- Region: \`${{ steps.config.outputs.scaleway_region }}\`"
+            echo "- Registry endpoint: \`${{ steps.config.outputs.container_registry_endpoint }}\`"
+            echo "- Image: \`${{ steps.build.outputs.image_reference }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-dev:
+    needs: build-and-push-dev
+    uses: ./.github/workflows/deploy-scaleway.yml
+    with:
+      environment: dev
+      image_reference: ${{ needs.build-and-push-dev.outputs.image_reference }}
+    secrets: inherit
