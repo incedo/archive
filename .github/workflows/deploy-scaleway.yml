@@ -122,6 +122,7 @@ jobs:
           scaleway_zone="${INPUT_SCALEWAY_ZONE:-${SCALEWAY_ZONE:-${VAR_SCALEWAY_ZONE:-}}}"
           container_id="${INPUT_CONTAINER_ID:-${SCW_CONTAINER_ID:-${VAR_CONTAINER_ID:-}}}"
           container_name="${INPUT_CONTAINER_NAME:-${SCW_CONTAINER_NAME:-${VAR_CONTAINER_NAME:-archive-api}}}"
+          container_id="${container_id##*/}"
 
           missing=0
           for name in scaleway_organization_id scaleway_project_id scaleway_region scaleway_zone container_id container_name; do
